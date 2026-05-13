@@ -9,11 +9,11 @@ export default function Home() {
     <div className="flex h-dvh bg-[#05050a] text-white font-[450] justify-center items-center sm:p-5">
       <div className="flex flex-col w-full max-w-[800px] h-full bg-[#0e0e16] sm:border sm:border-white/10 sm:rounded-2xl overflow-hidden justify-center items-center gap-6 p-8">
         <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center text-lg font-bold tracking-wide">
-          AI
+          B
         </div>
 
         <div className="text-center">
-          <h1 className="text-2xl font-semibold mb-2">Kalenteri-assistentti</h1>
+          <h1 className="text-2xl font-semibold mb-2">Bantu</h1>
           <p className="text-gray-400 text-[14px]">Hallitse kalenteriasi luonnollisella kielellä</p>
         </div>
 

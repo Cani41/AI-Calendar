@@ -138,10 +138,10 @@ export default function Dashboard() {
         {/* Header */}
         <header className="flex-none px-6 py-4 border-b border-white/10 flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold tracking-wide">
-            AI
+            B
           </div>
           <div className="flex-1">
-            <h1 className="text-[15px] font-semibold leading-none">Kalenteri-assistentti</h1>
+            <h1 className="text-[15px] font-semibold leading-none">Bantu</h1>
             <p className="text-[11px] text-gray-400 mt-0.5">{loading ? "kirjoittaa…" : "valmis"}</p>
           </div>
           <a
@@ -173,7 +173,7 @@ export default function Dashboard() {
             >
               {msg.role === "assistant" && (
                 <div className="flex-none w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-[10px] font-bold mb-0.5">
-                  AI
+                  B
                 </div>
               )}
 

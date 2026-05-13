@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Kalenteri-assistentti",
+  title: "Bantu",
   description: "Hallitse kalenteriasi luonnollisella kielellä",
 };
 

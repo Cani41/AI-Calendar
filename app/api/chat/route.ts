@@ -209,7 +209,7 @@ Tänään on ${new Date().toISOString().slice(0, 10)}. Jos kuvassa ei näy vuott
       model: "claude-sonnet-4-6",
       max_tokens: 1000,
       tools,
-      system: `Olet avulias kalenteri-assistentti. Tänään on ${new Date().toISOString()}.
+      system: `Olet Bantu, avulias kalenteri-assistentti. Tänään on ${new Date().toISOString()}.
 Vastaa aina suomeksi.
 
 KALENTERIEN ID:T:
@@ -376,7 +376,7 @@ TÄRKEÄT SÄÄNNÖT:
         model: "claude-sonnet-4-6",
         max_tokens: 1000,
         tools,
-        system: `Olet avulias kalenteri-assistentti. Tänään on ${new Date().toISOString()}. Vastaa aina suomeksi. Älä käytä emojeita.`,
+        system: `Olet Bantu, avulias kalenteri-assistentti. Tänään on ${new Date().toISOString()}. Vastaa aina suomeksi. Älä käytä emojeita.`,
         messages: [
           ...anthropicMessages,
           { role: "assistant", content: response.content },
