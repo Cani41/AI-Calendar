@@ -6,6 +6,20 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
+function formatFinnishDateTime(iso: string | null | undefined): string {
+  if (!iso) return "tuntematon";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleString("fi-FI", {
+    timeZone: "Europe/Helsinki",
+    day: "numeric",
+    month: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function getOAuthClient(tokens: string) {
   const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
@@ -55,6 +69,21 @@ const tools: Anthropic.Tool[] = [
       required: ["event_id", "event_title"],
     },
   },
+  {
+    name: "update_calendar_event",
+    description: "Muokkaa olemassa olevan tapahtuman tietoja Google-kalenterissa",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        event_id: { type: "string", description: "Muokattavan tapahtuman ID" },
+        title: { type: "string", description: "Uusi nimi" },
+        start: { type: "string", description: "Uusi alkamisaika ISO 8601 -muodossa" },
+        end: { type: "string", description: "Uusi loppumisaika ISO 8601 -muodossa" },
+        description: { type: "string", description: "Uudet lisätiedot" },
+      },
+      required: ["event_id"],
+    },
+  },
 ];
 
 export async function POST(request: NextRequest) {
@@ -63,10 +92,24 @@ export async function POST(request: NextRequest) {
     const tokens = request.cookies.get("google_tokens")?.value;
 
     if (!tokens) {
-      return NextResponse.json({ reply: "Kirjaudu ensin Google-tilille." });
+      return NextResponse.json({ reply: "Kirjaudu ensin Google-tilille.", relogin: true });
     }
 
     const auth = getOAuthClient(tokens);
+
+    // Päivitä access token jos se on vanhentunut tai vanhenee pian
+    let refreshedTokens: string | null = null;
+    const parsed = JSON.parse(tokens);
+    if (parsed.expiry_date && parsed.expiry_date < Date.now() + 60_000) {
+      try {
+        const { credentials } = await auth.refreshAccessToken();
+        auth.setCredentials(credentials);
+        refreshedTokens = JSON.stringify(credentials);
+      } catch {
+        return NextResponse.json({ reply: "Istuntosi on vanhentunut. Ole hyvä ja kirjaudu uudelleen.", relogin: true });
+      }
+    }
+
     const calendar = google.calendar({ version: "v3", auth });
 
     const anthropicMessages: Anthropic.MessageParam[] = messages.map(
@@ -102,7 +145,13 @@ TÄRKEÄT SÄÄNNÖT:
 - Älä käytä emojeita missään vastauksissa.
 - Varmista että kaikki tapahtumat luodaan Europe/Helsinki-aikavyöhykkeessä ellei muuta mainita.
 - Nimeä tapahtumat yksinkertaisesti, esim. kaupungin nimi tai tapahtuman nimi suoraan otsikoksi.
-- Jos käyttäjä pyytää poistamaan tapahtuman, hae ensin tapahtumat get_calendar_events-työkalulla ja sitten poista oikea tapahtuma delete_calendar_event-työkalulla.`,
+- Jos käyttäjä pyytää poistamaan tapahtuman, hae ensin tapahtumat get_calendar_events-työkalulla ja sitten poista oikea tapahtuma delete_calendar_event-työkalulla.
+- Jos käyttäjä pyytää muokkaamaan tapahtumaa, hae ensin tapahtumat get_calendar_events-työkalulla ja sitten muokkaa oikeaa tapahtumaa update_calendar_event-työkalulla.
+- Jos käyttäjä kiittää eikä pyydä mitään tehtävää, vastaa "Ole hyvä!" ja kysy voitko auttaa muissa asioissa. Listaa lyhyesti mitä voit tehdä, esimerkiksi:
+  • Lisätä tapahtumia kalenteriin
+  • Hakea tulevia tapahtumia
+  • Muokata tai poistaa tapahtumia
+  • Kertoa työvuoroista, juhlapyhistä tai opinnoista`,
       messages: anthropicMessages,
     });
 
@@ -121,17 +170,45 @@ TÄRKEÄT SÄÄNNÖT:
             description?: string;
           };
 
-          await calendar.events.insert({
+          // Duplikaattitarkistus: sama otsikko samana päivänä
+          const startDate = new Date(input.start);
+          const dayStart = new Date(startDate);
+          dayStart.setHours(0, 0, 0, 0);
+          const dayEnd = new Date(startDate);
+          dayEnd.setHours(23, 59, 59, 999);
+
+          const existing = await calendar.events.list({
             calendarId: "primary",
-            requestBody: {
-              summary: input.title,
-              description: input.description,
-              start: { dateTime: input.start, timeZone: "Europe/Helsinki" },
-              end: { dateTime: input.end, timeZone: "Europe/Helsinki" },
-            },
+            timeMin: dayStart.toISOString(),
+            timeMax: dayEnd.toISOString(),
+            singleEvents: true,
           });
 
-          reply = `Tapahtuma "${input.title}" lisatty kalenteriin.`;
+          const duplicate = existing.data.items?.find(
+            (e) => e.summary?.toLowerCase() === input.title.toLowerCase()
+          );
+
+          if (duplicate) {
+            const dupStart = duplicate.start?.dateTime || duplicate.start?.date;
+            const dupEnd = duplicate.end?.dateTime || duplicate.end?.date;
+            reply =
+              `Samankaltainen tapahtuma löytyy jo kalenteristasi:\n\n` +
+              `**${duplicate.summary}**\n` +
+              `Alkaa: ${formatFinnishDateTime(dupStart)}\n` +
+              `Päättyy: ${formatFinnishDateTime(dupEnd)}` +
+              (duplicate.description ? `\nLisätiedot: ${duplicate.description}` : "");
+          } else {
+            await calendar.events.insert({
+              calendarId: "primary",
+              requestBody: {
+                summary: input.title,
+                description: input.description,
+                start: { dateTime: input.start, timeZone: "Europe/Helsinki" },
+                end: { dateTime: input.end, timeZone: "Europe/Helsinki" },
+              },
+            });
+            reply = `Tapahtuma "${input.title}" lisätty kalenteriin.`;
+          }
 
         } else if (block.name === "get_calendar_events") {
           const input = block.input as { days?: number; calendar_ids?: string[] };
@@ -181,6 +258,29 @@ TÄRKEÄT SÄÄNNÖT:
           });
 
           reply = `Tapahtuma "${input.event_title}" poistettu kalenterista.`;
+
+        } else if (block.name === "update_calendar_event") {
+          const input = block.input as {
+            event_id: string;
+            title?: string;
+            start?: string;
+            end?: string;
+            description?: string;
+          };
+
+          const patch: Record<string, unknown> = {};
+          if (input.title) patch.summary = input.title;
+          if (input.description !== undefined) patch.description = input.description;
+          if (input.start) patch.start = { dateTime: input.start, timeZone: "Europe/Helsinki" };
+          if (input.end) patch.end = { dateTime: input.end, timeZone: "Europe/Helsinki" };
+
+          await calendar.events.patch({
+            calendarId: "primary",
+            eventId: input.event_id,
+            requestBody: patch,
+          });
+
+          reply = `Tapahtuma päivitetty.`;
         }
       }
     }
@@ -190,7 +290,7 @@ TÄRKEÄT SÄÄNNÖT:
         model: "claude-sonnet-4-6",
         max_tokens: 1000,
         tools,
-        system: `Olet avulias kalenteri-assistentti. Vastaa aina suomeksi. Älä käytä emojeita.`,
+        system: `Olet avulias kalenteri-assistentti. Tänään on ${new Date().toISOString()}. Vastaa aina suomeksi. Älä käytä emojeita.`,
         messages: [
           ...anthropicMessages,
           { role: "assistant", content: response.content },
@@ -199,19 +299,50 @@ TÄRKEÄT SÄÄNNÖT:
       });
 
       for (const block of followUp.content) {
-        if (block.type === "text") reply = block.text;
-        else if (block.type === "tool_use" && block.name === "delete_calendar_event") {
+        if (block.type === "text") {
+          reply = block.text;
+        } else if (block.type === "tool_use" && block.name === "delete_calendar_event") {
           const input = block.input as { event_id: string; event_title: string };
           await calendar.events.delete({
             calendarId: "primary",
             eventId: input.event_id,
           });
           reply = `Tapahtuma "${input.event_title}" poistettu kalenterista.`;
+        } else if (block.type === "tool_use" && block.name === "update_calendar_event") {
+          const input = block.input as {
+            event_id: string;
+            title?: string;
+            start?: string;
+            end?: string;
+            description?: string;
+          };
+
+          const patch: Record<string, unknown> = {};
+          if (input.title) patch.summary = input.title;
+          if (input.description !== undefined) patch.description = input.description;
+          if (input.start) patch.start = { dateTime: input.start, timeZone: "Europe/Helsinki" };
+          if (input.end) patch.end = { dateTime: input.end, timeZone: "Europe/Helsinki" };
+
+          await calendar.events.patch({
+            calendarId: "primary",
+            eventId: input.event_id,
+            requestBody: patch,
+          });
+
+          reply = `Tapahtuma päivitetty.`;
         }
       }
     }
 
-    return NextResponse.json({ reply });
+    const jsonResponse = NextResponse.json({ reply });
+    if (refreshedTokens) {
+      jsonResponse.cookies.set("google_tokens", refreshedTokens, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 60 * 60 * 24 * 7,
+      });
+    }
+    return jsonResponse;
   } catch (error) {
     console.error("API error:", error);
     return NextResponse.json({ reply: "Virhe: " + String(error) }, { status: 500 });

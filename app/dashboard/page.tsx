@@ -9,7 +9,17 @@ type Message = {
 };
 
 export default function Dashboard() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const STORAGE_KEY = "chat_history";
+
+  const [messages, setMessages] = useState<Message[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const saved = sessionStorage.getItem(STORAGE_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -18,6 +28,14 @@ export default function Dashboard() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+    } catch {
+      // sessionStorage ei käytettävissä
+    }
+  }, [messages]);
 
   async function sendMessage() {
     const text = input.trim();
@@ -32,15 +50,27 @@ export default function Dashboard() {
       textareaRef.current.style.height = "auto";
     }
 
-    const res = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: updatedMessages }),
-    });
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: updatedMessages }),
+      });
 
-    const data = await res.json();
-    setMessages([...updatedMessages, { role: "assistant", content: data.reply }]);
-    setLoading(false);
+      const data = await res.json();
+      setMessages([...updatedMessages, { role: "assistant", content: data.reply }]);
+
+      if (data.relogin) {
+        setTimeout(() => window.location.href = "/", 2000);
+      }
+    } catch {
+      setMessages([...updatedMessages, {
+        role: "assistant",
+        content: "Verkkovirhe — tarkista yhteytesi ja yritä uudelleen.",
+      }]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -68,10 +98,16 @@ export default function Dashboard() {
           <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold tracking-wide">
             AI
           </div>
-          <div>
+          <div className="flex-1">
             <h1 className="text-[15px] font-semibold leading-none">Kalenteri-assistentti</h1>
-            <p className="text-[11px] text-gray-400 mt-0.5">valmis</p>
+            <p className="text-[11px] text-gray-400 mt-0.5">{loading ? "kirjoittaa…" : "valmis"}</p>
           </div>
+          <a
+            href="/api/auth/logout"
+            className="text-[12px] text-gray-500 hover:text-gray-300 transition-colors px-2 py-1 rounded-lg hover:bg-white/5"
+          >
+            Kirjaudu ulos
+          </a>
         </header>
 
         {/* Message list */}

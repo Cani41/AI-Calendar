@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   const response = NextResponse.redirect(new URL("/dashboard", request.url));
   response.cookies.set("google_tokens", JSON.stringify(tokens), {
     httpOnly: true,
-    secure: false,
+    secure: process.env.NODE_ENV === "production",
     maxAge: 60 * 60 * 24 * 7,
   });
 
