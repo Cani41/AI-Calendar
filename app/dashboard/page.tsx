@@ -6,6 +6,13 @@ import ReactMarkdown from "react-markdown";
 type Message = {
   role: "user" | "assistant";
   content: string;
+  imageUrl?: string;
+};
+
+type PendingImage = {
+  data: string;      // base64 ilman data URL -etuliitettä
+  mediaType: string;
+  url: string;       // data URL esikatselua varten
 };
 
 export default function Dashboard() {
@@ -22,8 +29,10 @@ export default function Dashboard() {
   });
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [pendingImage, setPendingImage] = useState<PendingImage | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -31,19 +40,49 @@ export default function Dashboard() {
 
   useEffect(() => {
     try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+      // Ei tallenneta base64-kuvia sessionStorageen
+      const toSave = messages.map(({ imageUrl: _, ...m }) => m);
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
     } catch {
       // sessionStorage ei käytettävissä
     }
   }, [messages]);
 
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Kuva on liian suuri. Maksimikoko on 5 MB.");
+      e.target.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      setPendingImage({
+        data: dataUrl.split(",")[1],
+        mediaType: file.type,
+        url: dataUrl,
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  }
+
   async function sendMessage() {
     const text = input.trim();
-    if (!text || loading) return;
+    if ((!text && !pendingImage) || loading) return;
 
-    const updatedMessages: Message[] = [...messages, { role: "user", content: text }];
+    const userMessage: Message = {
+      role: "user",
+      content: text,
+      imageUrl: pendingImage?.url,
+    };
+
+    const updatedMessages: Message[] = [...messages, userMessage];
     setMessages(updatedMessages);
     setInput("");
+    setPendingImage(null);
     setLoading(true);
 
     if (textareaRef.current) {
@@ -54,14 +93,19 @@ export default function Dashboard() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: updatedMessages }),
+        body: JSON.stringify({
+          messages: updatedMessages.map(({ imageUrl: _, ...m }) => m),
+          image: pendingImage
+            ? { data: pendingImage.data, mediaType: pendingImage.mediaType }
+            : undefined,
+        }),
       });
 
       const data = await res.json();
       setMessages([...updatedMessages, { role: "assistant", content: data.reply }]);
 
       if (data.relogin) {
-        setTimeout(() => window.location.href = "/", 2000);
+        setTimeout(() => (window.location.href = "/"), 2000);
       }
     } catch {
       setMessages([...updatedMessages, {
@@ -87,10 +131,7 @@ export default function Dashboard() {
   }
 
   return (
-    /* Outer shell — very dark, fills the screen */
     <div className="flex h-dvh bg-[#05050a] text-white font-[450] justify-center items-center sm:p-5">
-
-      {/* Chat column — max 800 px, own bg + border + rounded corners */}
       <div className="flex flex-col w-full max-w-[800px] h-full bg-[#0e0e16] sm:border sm:border-white/10 sm:rounded-2xl overflow-hidden">
 
         {/* Header */}
@@ -118,7 +159,9 @@ export default function Dashboard() {
                 📅
               </div>
               <p className="text-gray-300 font-medium">Mitä haluaisit tehdä?</p>
-              <p className="text-gray-500 text-sm">Voit lisätä, hakea tai poistaa tapahtumia kalenteristasi.</p>
+              <p className="text-gray-500 text-sm">
+                Voit lisätä, hakea tai poistaa tapahtumia — tai lähetä kuva työvuorolistasta.
+              </p>
             </div>
           )}
 
@@ -133,17 +176,24 @@ export default function Dashboard() {
                 </div>
               )}
 
-              <div
-                className={`max-w-[85%] sm:max-w-[72%] text-[14px] leading-relaxed ${
-                  msg.role === "user"
-                    ? "bg-blue-600 text-white px-4 py-2.5 rounded-[20px] rounded-br-[4px] shadow-md"
-                    : "bg-[#181826] text-gray-100 px-4 py-3 rounded-[20px] rounded-bl-[4px] border border-white/8 shadow-md prose prose-invert prose-sm max-w-none"
-                }`}
-              >
-                {msg.role === "assistant" ? (
-                  <ReactMarkdown>{msg.content}</ReactMarkdown>
-                ) : (
-                  msg.content
+              <div className={`max-w-[85%] sm:max-w-[72%] text-[14px] leading-relaxed ${
+                msg.role === "user"
+                  ? "bg-blue-600 text-white rounded-[20px] rounded-br-[4px] shadow-md overflow-hidden"
+                  : "bg-[#181826] text-gray-100 px-4 py-3 rounded-[20px] rounded-bl-[4px] border border-white/8 shadow-md prose prose-invert prose-sm max-w-none"
+              }`}>
+                {msg.imageUrl && (
+                  <img
+                    src={msg.imageUrl}
+                    alt="Lähetetty kuva"
+                    className="w-full max-w-[260px] rounded-[16px] rounded-br-[4px] block"
+                  />
+                )}
+                {msg.content && (
+                  <div className={msg.imageUrl ? "px-4 py-2" : "px-4 py-2.5"}>
+                    {msg.role === "assistant"
+                      ? <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      : msg.content}
+                  </div>
                 )}
               </div>
             </div>
@@ -169,21 +219,64 @@ export default function Dashboard() {
 
         {/* Input bar */}
         <div className="flex-none border-t border-white/10 px-3 py-3 sm:px-5 sm:py-4">
+
+          {/* Kuvan esikatselu */}
+          {pendingImage && (
+            <div className="relative inline-block mb-2 ml-1">
+              <img
+                src={pendingImage.url}
+                alt="Esikatselu"
+                className="h-16 w-16 object-cover rounded-xl border border-white/10"
+              />
+              <button
+                onClick={() => setPendingImage(null)}
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition-colors"
+                aria-label="Poista kuva"
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
+
           <div className="flex items-end gap-2">
+            {/* Kuvan lähetyspainike */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={loading}
+              className="flex-none w-11 h-11 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all text-gray-400 hover:text-gray-200 hover:bg-white/5 disabled:opacity-40"
+              aria-label="Lisää kuva"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="3" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <path d="M21 15l-5-5L5 21" />
+              </svg>
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileSelect}
+            />
+
             <div className="flex-1 flex items-end bg-[#181826] border border-white/10 rounded-2xl px-4 py-2.5 focus-within:border-blue-500/50 transition-colors">
               <textarea
                 ref={textareaRef}
                 className="flex-1 bg-transparent text-white resize-none outline-none text-[16px] sm:text-[14px] leading-relaxed overflow-hidden placeholder:text-gray-500 font-[450]"
                 rows={1}
-                placeholder="Kirjoita viesti…"
+                placeholder={pendingImage ? "Lisää viesti kuvaan (valinnainen)…" : "Kirjoita viesti…"}
                 value={input}
                 onChange={handleInput}
                 onKeyDown={handleKeyDown}
               />
             </div>
+
             <button
               onClick={sendMessage}
-              disabled={loading || !input.trim()}
+              disabled={loading || (!input.trim() && !pendingImage)}
               className="flex-none w-11 h-11 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all bg-blue-600 hover:bg-blue-500 disabled:bg-[#1e1e2e] disabled:text-gray-600 text-white shadow-sm"
               aria-label="Lähetä"
             >
@@ -193,7 +286,9 @@ export default function Dashboard() {
               </svg>
             </button>
           </div>
-          <p className="hidden sm:block text-center text-[11px] text-gray-600 mt-2">Enter lähettää · Shift+Enter uusi rivi</p>
+          <p className="hidden sm:block text-center text-[11px] text-gray-600 mt-2">
+            Enter lähettää · Shift+Enter uusi rivi · Kuvakkeella voit lähettää työvuorolistan
+          </p>
         </div>
 
       </div>

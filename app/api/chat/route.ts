@@ -86,9 +86,11 @@ const tools: Anthropic.Tool[] = [
   },
 ];
 
+const ETYOVUOROT_CALENDAR_ID = "cufrl83s2cnnf4bq5t46k282ms@group.calendar.google.com";
+
 export async function POST(request: NextRequest) {
   try {
-    const { messages } = await request.json();
+    const { messages, image } = await request.json();
     const tokens = request.cookies.get("google_tokens")?.value;
 
     if (!tokens) {
@@ -111,6 +113,90 @@ export async function POST(request: NextRequest) {
     }
 
     const calendar = google.calendar({ version: "v3", auth });
+
+    // Kuvavirta: tunnista työvuorot ja lisää kalenteriin
+    if (image) {
+      const visionResponse = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 2000,
+        messages: [{
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: image.mediaType as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+                data: image.data,
+              },
+            },
+            {
+              type: "text",
+              text: `Analysoi tämä työvuorolista. Tunnista kaikki työvuorot ja palauta ne täsmälleen tässä JSON-muodossa, ei mitään muuta tekstiä:
+{
+  "shifts": [
+    { "date": "YYYY-MM-DD", "startTime": "HH:MM", "endTime": "HH:MM" }
+  ]
+}
+Tänään on ${new Date().toISOString().slice(0, 10)}. Jos kuvassa ei näy vuotta, käytä kuluvaa vuotta. Jos et löydä työvuoroja, palauta { "shifts": [] }.`,
+            },
+          ],
+        }],
+      });
+
+      const raw = visionResponse.content[0].type === "text" ? visionResponse.content[0].text : "";
+      let shifts: { date: string; startTime: string; endTime: string }[] = [];
+
+      try {
+        const match = raw.match(/\{[\s\S]*\}/);
+        if (match) shifts = JSON.parse(match[0]).shifts ?? [];
+      } catch {
+        return NextResponse.json({ reply: "En pystynyt lukemaan työvuoroja kuvasta. Varmista että kuva on selkeä työvuorolista." });
+      }
+
+      if (shifts.length === 0) {
+        return NextResponse.json({ reply: "En löytänyt kuvasta työvuoroja. Varmista että kuva sisältää työvuorolistan." });
+      }
+
+      let created = 0;
+      const failed: string[] = [];
+
+      for (const shift of shifts) {
+        try {
+          await calendar.events.insert({
+            calendarId: ETYOVUOROT_CALENDAR_ID,
+            requestBody: {
+              summary: "Työvuoro",
+              start: { dateTime: `${shift.date}T${shift.startTime}:00`, timeZone: "Europe/Helsinki" },
+              end: { dateTime: `${shift.date}T${shift.endTime}:00`, timeZone: "Europe/Helsinki" },
+            },
+          });
+          created++;
+        } catch {
+          failed.push(`${shift.date} ${shift.startTime}–${shift.endTime}`);
+        }
+      }
+
+      let reply = `Tunnistin kuvasta **${shifts.length} työvuoroa** ja lisäsin **${created}** Elisa Työvuorot -kalenteriin.`;
+      if (failed.length > 0) {
+        reply += `\n\nEpäonnistui:\n${failed.map((f) => `- ${f}`).join("\n")}`;
+      }
+
+      const shiftList = shifts
+        .map((s) => `- ${formatFinnishDateTime(`${s.date}T${s.startTime}:00`).replace(",", "")} – ${s.endTime}`)
+        .join("\n");
+      reply += `\n\n**Lisätyt vuorot:**\n${shiftList}`;
+
+      const imgResponse = NextResponse.json({ reply });
+      if (refreshedTokens) {
+        imgResponse.cookies.set("google_tokens", refreshedTokens, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          maxAge: 60 * 60 * 24 * 7,
+        });
+      }
+      return imgResponse;
+    }
 
     const anthropicMessages: Anthropic.MessageParam[] = messages.map(
       (m: { role: string; content: string }) => ({
