@@ -18,15 +18,16 @@ type PendingImage = {
 export default function Dashboard() {
   const STORAGE_KEY = "chat_history";
 
-  const [messages, setMessages] = useState<Message[]>(() => {
-    if (typeof window === "undefined") return [];
+  const [messages, setMessages] = useState<Message[]>([]);
+
+  useEffect(() => {
     try {
       const saved = sessionStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : [];
+      if (saved) setMessages(JSON.parse(saved));
     } catch {
-      return [];
+      // sessionStorage ei käytettävissä
     }
-  });
+  }, []);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [pendingImage, setPendingImage] = useState<PendingImage | null>(null);
