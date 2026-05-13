@@ -19,38 +19,38 @@ function getOAuthClient(tokens: string) {
 const tools: Anthropic.Tool[] = [
   {
     name: "create_calendar_event",
-    description: "Luo tapahtuman Google Kalenteriin",
+    description: "Luo tapahtuman Google-kalenteriin",
     input_schema: {
       type: "object" as const,
       properties: {
         title: { type: "string", description: "Tapahtuman nimi" },
-        start: { type: "string", description: "Alkamisaika ISO 8601 muodossa" },
-        end: { type: "string", description: "Loppumisaika ISO 8601 muodossa" },
-        description: { type: "string", description: "Lisatiedot" },
+        start: { type: "string", description: "Alkamisaika ISO 8601 -muodossa" },
+        end: { type: "string", description: "Loppumisaika ISO 8601 -muodossa" },
+        description: { type: "string", description: "Lisätiedot" },
       },
       required: ["title", "start", "end"],
     },
   },
   {
     name: "get_calendar_events",
-    description: "Hakee tapahtumat Google Kalenterista",
+    description: "Hakee tapahtumat Google-kalenterista",
     input_schema: {
       type: "object" as const,
       properties: {
-        days: { type: "number", description: "Kuinka monen paivan tapahtumat haetaan, oletus 30" },
-        calendar_ids: { type: "array", items: { type: "string" }, description: "Lista kalenterin ID:ista" },
+        days: { type: "number", description: "Kuinka monen päivän tapahtumat haetaan, oletus 30" },
+        calendar_ids: { type: "array", items: { type: "string" }, description: "Lista kalenterin ID:istä" },
       },
       required: [],
     },
   },
   {
     name: "delete_calendar_event",
-    description: "Poistaa tapahtuman Google Kalenterista",
+    description: "Poistaa tapahtuman Google-kalenterista",
     input_schema: {
       type: "object" as const,
       properties: {
         event_id: { type: "string", description: "Poistettavan tapahtuman ID" },
-        event_title: { type: "string", description: "Tapahtuman nimi vahvistusta varten" },
+        event_title: { type: "string", description: "Tapahtuman nimi vahvistukseksi" },
       },
       required: ["event_id", "event_title"],
     },
@@ -59,7 +59,7 @@ const tools: Anthropic.Tool[] = [
 
 export async function POST(request: NextRequest) {
   try {
-    const { message } = await request.json();
+    const { messages } = await request.json();
     const tokens = request.cookies.get("google_tokens")?.value;
 
     if (!tokens) {
@@ -69,36 +69,41 @@ export async function POST(request: NextRequest) {
     const auth = getOAuthClient(tokens);
     const calendar = google.calendar({ version: "v3", auth });
 
-
+    const anthropicMessages: Anthropic.MessageParam[] = messages.map(
+      (m: { role: string; content: string }) => ({
+        role: m.role as "user" | "assistant",
+        content: m.content,
+      })
+    );
 
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 1000,
       tools,
-system: `Olet avulias kalenteri-assistentti. Tanaan on ${new Date().toISOString()}.
+      system: `Olet avulias kalenteri-assistentti. Tänään on ${new Date().toISOString()}.
 Vastaa aina suomeksi.
 
 KALENTERIEN ID:T:
 - Tapahtumat (omat tapahtumat): santerikananen@gmail.com
-- Elisa Tyovuorot: cufrl83s2cnnf4bq5t46k282ms@group.calendar.google.com
-- Suomen juhlapyhat: fi.finnish#holiday@group.v.calendar.google.com
+- Elisa Työvuorot: cufrl83s2cnnf4bq5t46k282ms@group.calendar.google.com
+- Suomen juhlapyhät: fi.finnish#holiday@group.v.calendar.google.com
 - SISU (yliopisto): m0g359q6bvk035bf17d7e80gh361k9lb@import.calendar.google.com
 
-TARKEAT SAANNOT:
-- Uudet tapahtumat lisataan aina Tapahtumat-kalenteriin (santerikananen@gmail.com).
-- Jos kayttaja kysyy omista tapahtumistaan tai mitä on tulossa, hae Tapahtumat-kalenterista.
-- Jos kayttaja kysyy tyovuoroista, hae Elisa Tyovuorot -kalenterista.
-- Jos kayttaja kysyy juhlapyhistä tai merkkipaivista, hae Suomen juhlapyhat -kalenterista.
-- Jos kayttaja kysyy koulusta tai opinnoista, hae SISU-kalenterista.
-- Jos kayttaja kysyy kaikesta tai "mitä minulla on", hae kaikista paitsi sanna.kananen1@gmail.com.
-- Jos kayttaja mainitsee matkan tai tapahtuman jossa on alkamis- ja loppumisaika, lisaa YKSI tapahtuma.
-- Hotellivaraukset ja matkat ovat aina yksittaisia pitkakestoisia tapahtumia.
-- Jos loppuaikaa ei ole maaritelty, kayta paivan loppua (23:59).
-- Ala kayta emojeita missaan vastauksissa.
-- Varmista etta kaikki tapahtumat luodaan Europe/Helsinki aikavyohykkeessa ellei muuta mainita.
+TÄRKEÄT SÄÄNNÖT:
+- Uudet tapahtumat lisätään aina Tapahtumat-kalenteriin (santerikananen@gmail.com).
+- Jos käyttäjä kysyy omista tapahtumistaan tai mitä on tulossa, hae Tapahtumat-kalenterista.
+- Jos käyttäjä kysyy työvuoroista, hae Elisa Työvuorot -kalenterista.
+- Jos käyttäjä kysyy juhlapyhistä tai merkkipäivistä, hae Suomen juhlapyhät -kalenterista.
+- Jos käyttäjä kysyy koulusta tai opinnoista, hae SISU-kalenterista.
+- Jos käyttäjä kysyy kaikesta tai "mitä minulla on", hae kaikista paitsi sanna.kananen1@gmail.com.
+- Jos käyttäjä mainitsee matkan tai tapahtuman jossa on alkamis- ja loppumisaika, lisää YKSI tapahtuma.
+- Hotellivaraukset ja matkat ovat aina yksittäisiä pitkäkestoisia tapahtumia.
+- Jos loppuaikaa ei ole määritelty, käytä päivän loppua (23:59).
+- Älä käytä emojeita missään vastauksissa.
+- Varmista että kaikki tapahtumat luodaan Europe/Helsinki-aikavyöhykkeessä ellei muuta mainita.
 - Nimeä tapahtumat yksinkertaisesti, esim. kaupungin nimi tai tapahtuman nimi suoraan otsikoksi.
-- Jos kayttaja pyytaa poistamaan tapahtuman, hae ensin tapahtumat get_calendar_events-tyokalulla ja sitten poista oikea tapahtuma delete_calendar_event-tyokalulla.`,
-      messages: [{ role: "user", content: message }],
+- Jos käyttäjä pyytää poistamaan tapahtuman, hae ensin tapahtumat get_calendar_events-työkalulla ja sitten poista oikea tapahtuma delete_calendar_event-työkalulla.`,
+      messages: anthropicMessages,
     });
 
     let reply = "";
@@ -185,9 +190,9 @@ TARKEAT SAANNOT:
         model: "claude-sonnet-4-6",
         max_tokens: 1000,
         tools,
-        system: `Olet avulias kalenteri-assistentti. Vastaa aina suomeksi. Ala kayta emojeita.`,
+        system: `Olet avulias kalenteri-assistentti. Vastaa aina suomeksi. Älä käytä emojeita.`,
         messages: [
-          { role: "user", content: message },
+          ...anthropicMessages,
           { role: "assistant", content: response.content },
           ...toolResults,
         ],
