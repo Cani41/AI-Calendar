@@ -1,0 +1,33 @@
+name: Deploy to Vercel
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy Preview (dev)
+        if: github.ref == 'refs/heads/dev'
+        run: npx vercel deploy --token=${{ secrets.VERCEL_TOKEN }} --yes 2>&1 | tee deploy-url.txt
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Deploy Production (main)
+        if: github.ref == 'refs/heads/main'
+        run: npx vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} --yes
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Comment Preview URL
+        if: github.ref == 'refs/heads/dev'
+        run: |
+          URL=$(cat deploy-url.txt | grep -o 'https://[^ ]*vercel\.app' | head -1)
+          echo "Preview: $URL"
