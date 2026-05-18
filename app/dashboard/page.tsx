@@ -271,7 +271,7 @@ export default function Dashboard() {
                 ref={textareaRef}
                 className="flex-1 bg-transparent text-white resize-none outline-none text-[16px] leading-relaxed overflow-hidden placeholder:text-gray-500 font-[450]"
                 rows={1}
-                placeholder={pendingImage ? "Lisää viesti kuvaan (valinnainen)…" : "Kirjoita viesti…"}
+                placeholder={pendingImage ? "Lisää viesti kuvaan (valinnainen)…" : "Kirjoita Bantulle…"}
                 value={input}
                 onChange={handleInput}
                 onKeyDown={handleKeyDown}
