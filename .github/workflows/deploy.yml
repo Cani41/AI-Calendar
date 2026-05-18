@@ -18,4 +18,5 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Print Preview URL
-        run: grep -o 'https://[^ ]*vercel\.app' deploy-url.txt | head -1
+        run: |
+          cat deploy-url.txt | sed 's/\x1b\[[0-9;]*m//g' | grep -o 'https://[^ ]*\.vercel\.app' | head -1
