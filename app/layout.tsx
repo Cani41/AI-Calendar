@@ -21,6 +21,12 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "Bantu",
   description: "Hallitse kalenteriasi luonnollisella kielellä",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Bantu",
+  },
 };
 
 export default function RootLayout({
