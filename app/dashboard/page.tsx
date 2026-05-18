@@ -230,10 +230,11 @@ export default function Dashboard() {
 
   return (
     <div className="flex h-dvh bg-[#05050a] text-white font-[450] justify-center items-center sm:p-5">
-      <div className="flex flex-col w-full max-w-[800px] h-full bg-[#0e0e16] sm:border sm:border-white/10 sm:rounded-2xl overflow-hidden">
+      <div className="relative flex flex-col w-full max-w-[800px] h-full bg-[#0e0e16] sm:border sm:border-white/10 sm:rounded-2xl overflow-hidden">
 
         {/* Header */}
         <header className="flex-none px-6 py-4 border-b border-white/10 flex items-center gap-3">
+          <span className="absolute top-2 left-2 text-[10px] font-semibold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-md px-1.5 py-0.5 tracking-wide">DEV</span>
           <BantuAvatar className="w-8 h-8" />
           <div className="flex-1">
             <h1 className="text-[15px] font-semibold leading-none">Bantu</h1>
