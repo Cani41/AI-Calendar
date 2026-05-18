@@ -3,6 +3,26 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 
+function BantuAvatar({ className = "" }: { className?: string }) {
+  return (
+    <div className={`rounded-xl bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-700 flex items-center justify-center flex-none ${className}`}>
+      <svg viewBox="0 0 34 34" fill="none" className="w-[58%] h-[58%]">
+        <rect x="3" y="7" width="22" height="20" rx="3" stroke="white" strokeWidth="1.6" fill="none" strokeOpacity="0.9"/>
+        <rect x="3" y="7" width="22" height="7" rx="3" fill="white" fillOpacity="0.15"/>
+        <line x1="3" y1="14" x2="25" y2="14" stroke="white" strokeWidth="1.4" strokeOpacity="0.5"/>
+        <line x1="9" y1="5" x2="9" y2="9" stroke="white" strokeWidth="1.8" strokeLinecap="round"/>
+        <line x1="19" y1="5" x2="19" y2="9" stroke="white" strokeWidth="1.8" strokeLinecap="round"/>
+        <circle cx="9" cy="19" r="1.3" fill="white" fillOpacity="0.7"/>
+        <circle cx="14" cy="19" r="1.3" fill="white" fillOpacity="0.7"/>
+        <circle cx="19" cy="19" r="1.3" fill="white" fillOpacity="0.7"/>
+        <circle cx="9" cy="24" r="1.3" fill="white" fillOpacity="0.7"/>
+        <circle cx="14" cy="24" r="1.3" fill="white" fillOpacity="0.7"/>
+        <path d="M28 4 L29.1 7.9 L33 9 L29.1 10.1 L28 14 L26.9 10.1 L23 9 L26.9 7.9 Z" fill="white" opacity="0.95"/>
+      </svg>
+    </div>
+  );
+}
+
 type Message = {
   role: "user" | "assistant";
   content: string;
@@ -214,9 +234,7 @@ export default function Dashboard() {
 
         {/* Header */}
         <header className="flex-none px-6 py-4 border-b border-white/10 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold tracking-wide">
-            B
-          </div>
+          <BantuAvatar className="w-8 h-8" />
           <div className="flex-1">
             <h1 className="text-[15px] font-semibold leading-none">Bantu</h1>
             <p className="text-[11px] text-gray-400 mt-0.5">{loading ? "kirjoittaa…" : "valmis"}</p>
@@ -249,9 +267,7 @@ export default function Dashboard() {
               className={`flex items-end gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
             >
               {msg.role === "assistant" && (
-                <div className="flex-none w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-[10px] font-bold mb-0.5">
-                  B
-                </div>
+                <BantuAvatar className="w-7 h-7 mb-0.5" />
               )}
 
               <div className={`max-w-[85%] sm:max-w-[72%] text-[14px] leading-relaxed ${
@@ -279,9 +295,7 @@ export default function Dashboard() {
 
           {loading && (
             <div className="flex items-end gap-2 justify-start">
-              <div className="flex-none w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-[10px] font-bold mb-0.5">
-                AI
-              </div>
+              <BantuAvatar className="w-7 h-7 mb-0.5" />
               <div className="bg-[#181826] border border-white/8 rounded-[20px] rounded-bl-[4px] px-4 py-3.5 shadow-md">
                 <span className="flex gap-[5px] items-center">
                   <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:0ms]" />
