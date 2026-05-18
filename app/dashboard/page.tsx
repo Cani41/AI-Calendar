@@ -219,7 +219,10 @@ export default function Dashboard() {
         </div>
 
         {/* Input bar */}
-        <div className="flex-none border-t border-white/10 px-3 py-3 sm:px-5 sm:py-4">
+        <div
+          className="flex-none border-t border-white/10 px-3 pt-4 sm:px-5 sm:pt-4"
+          style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+        >
 
           {/* Kuvan esikatselu */}
           {pendingImage && (
@@ -241,12 +244,12 @@ export default function Dashboard() {
             </div>
           )}
 
-          <div className="flex items-end gap-2">
+          <div className="flex items-end gap-2.5">
             {/* Kuvan lähetyspainike */}
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={loading}
-              className="flex-none w-11 h-11 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all text-gray-400 hover:text-gray-200 hover:bg-white/5 disabled:opacity-40"
+              className="flex-none w-12 h-12 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center transition-all text-gray-400 hover:text-gray-200 hover:bg-white/5 disabled:opacity-40"
               aria-label="Lisää kuva"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -263,10 +266,10 @@ export default function Dashboard() {
               onChange={handleFileSelect}
             />
 
-            <div className="flex-1 flex items-end bg-[#181826] border border-white/10 rounded-2xl px-4 py-2.5 focus-within:border-blue-500/50 transition-colors">
+            <div className="flex-1 flex items-end bg-[#181826] border border-white/10 rounded-2xl px-4 py-3 focus-within:border-blue-500/50 transition-colors">
               <textarea
                 ref={textareaRef}
-                className="flex-1 bg-transparent text-white resize-none outline-none text-[16px] sm:text-[14px] leading-relaxed overflow-hidden placeholder:text-gray-500 font-[450]"
+                className="flex-1 bg-transparent text-white resize-none outline-none text-[16px] leading-relaxed overflow-hidden placeholder:text-gray-500 font-[450]"
                 rows={1}
                 placeholder={pendingImage ? "Lisää viesti kuvaan (valinnainen)…" : "Kirjoita viesti…"}
                 value={input}
@@ -278,7 +281,7 @@ export default function Dashboard() {
             <button
               onClick={sendMessage}
               disabled={loading || (!input.trim() && !pendingImage)}
-              className="flex-none w-11 h-11 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all bg-blue-600 hover:bg-blue-500 disabled:bg-[#1e1e2e] disabled:text-gray-600 text-white shadow-sm"
+              className="flex-none w-12 h-12 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center transition-all bg-blue-600 hover:bg-blue-500 disabled:bg-[#1e1e2e] disabled:text-gray-600 text-white shadow-sm"
               aria-label="Lähetä"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
