@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { flushSync } from "react-dom";
 import ReactMarkdown from "react-markdown";
 
 type Message = {
@@ -35,6 +34,35 @@ export default function Dashboard() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pendingCharsRef = useRef("");
+  const charIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (charIntervalRef.current) clearInterval(charIntervalRef.current);
+    };
+  }, []);
+
+  function startCharAnimation() {
+    if (charIntervalRef.current !== null) return;
+    charIntervalRef.current = setInterval(() => {
+      if (!pendingCharsRef.current) {
+        clearInterval(charIntervalRef.current!);
+        charIntervalRef.current = null;
+        return;
+      }
+      // Adaptive speed: drain faster when falling behind
+      const q = pendingCharsRef.current.length;
+      const count = q > 100 ? 4 : q > 40 ? 2 : 1;
+      const chars = pendingCharsRef.current.slice(0, count);
+      pendingCharsRef.current = pendingCharsRef.current.slice(count);
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (!last || last.role !== "assistant") return prev;
+        return [...prev.slice(0, -1), { ...last, content: last.content + chars }];
+      });
+    }, 12);
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -87,6 +115,13 @@ export default function Dashboard() {
     setPendingImage(null);
     setLoading(true);
 
+    // Reset typewriter state from any previous message
+    if (charIntervalRef.current) {
+      clearInterval(charIntervalRef.current);
+      charIntervalRef.current = null;
+    }
+    pendingCharsRef.current = "";
+
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
@@ -136,19 +171,13 @@ export default function Dashboard() {
           }
 
           if (event.type === "delta" && event.text) {
-            const isFirst = !assistantAdded;
-            if (isFirst) assistantAdded = true;
-            flushSync(() => {
-              if (isFirst) {
-                setMessages((prev) => [...prev, { role: "assistant", content: event.text! }]);
-                setLoading(false);
-              } else {
-                setMessages((prev) => {
-                  const last = prev[prev.length - 1];
-                  return [...prev.slice(0, -1), { ...last, content: last.content + event.text! }];
-                });
-              }
-            });
+            if (!assistantAdded) {
+              setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+              setLoading(false);
+              assistantAdded = true;
+            }
+            pendingCharsRef.current += event.text;
+            startCharAnimation();
           } else if (event.type === "error") {
             setMessages((prev) => [...prev, { role: "assistant", content: event.message ?? "Tuntematon virhe." }]);
             setLoading(false);
