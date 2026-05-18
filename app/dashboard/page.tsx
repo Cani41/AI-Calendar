@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import ReactMarkdown from "react-markdown";
 
 type Message = {
@@ -135,16 +136,19 @@ export default function Dashboard() {
           }
 
           if (event.type === "delta" && event.text) {
-            if (!assistantAdded) {
-              setMessages((prev) => [...prev, { role: "assistant", content: event.text! }]);
-              assistantAdded = true;
-              setLoading(false);
-            } else {
-              setMessages((prev) => {
-                const last = prev[prev.length - 1];
-                return [...prev.slice(0, -1), { ...last, content: last.content + event.text! }];
-              });
-            }
+            const isFirst = !assistantAdded;
+            if (isFirst) assistantAdded = true;
+            flushSync(() => {
+              if (isFirst) {
+                setMessages((prev) => [...prev, { role: "assistant", content: event.text! }]);
+                setLoading(false);
+              } else {
+                setMessages((prev) => {
+                  const last = prev[prev.length - 1];
+                  return [...prev.slice(0, -1), { ...last, content: last.content + event.text! }];
+                });
+              }
+            });
           } else if (event.type === "error") {
             setMessages((prev) => [...prev, { role: "assistant", content: event.message ?? "Tuntematon virhe." }]);
             setLoading(false);

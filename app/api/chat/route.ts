@@ -94,23 +94,6 @@ function send(obj: object): Uint8Array {
   return encoder.encode(JSON.stringify(obj) + "\n");
 }
 
-function iteratorToStream(iterator: AsyncGenerator<Uint8Array>): ReadableStream<Uint8Array> {
-  return new ReadableStream({
-    async pull(controller) {
-      try {
-        const { value, done } = await iterator.next();
-        if (done) {
-          controller.close();
-        } else {
-          controller.enqueue(value);
-        }
-      } catch (e) {
-        controller.error(e);
-      }
-    },
-  });
-}
-
 export async function POST(request: NextRequest) {
   const { messages, image } = await request.json();
   const tokens = request.cookies.get("google_tokens")?.value;
@@ -138,7 +121,11 @@ export async function POST(request: NextRequest) {
 
   const calendar = google.calendar({ version: "v3", auth });
 
-  const streamHeaders = new Headers({ "Content-Type": "application/x-ndjson" });
+  const streamHeaders = new Headers({
+    "Content-Type": "application/x-ndjson",
+    "Cache-Control": "no-cache, no-transform",
+    "X-Accel-Buffering": "no",
+  });
   if (refreshedTokens) {
     const prod = process.env.NODE_ENV === "production";
     streamHeaders.append(
@@ -458,5 +445,19 @@ Tänään on ${new Date().toISOString().slice(0, 10)}. Jos kuvassa ei näy vuott
     }
   }
 
-  return new Response(iteratorToStream(generate()), { headers: streamHeaders });
+  const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+  const writer = writable.getWriter();
+
+  (async () => {
+    try {
+      for await (const chunk of generate()) {
+        await writer.write(chunk);
+      }
+      await writer.close();
+    } catch {
+      await writer.abort().catch(() => {});
+    }
+  })();
+
+  return new Response(readable, { headers: streamHeaders });
 }
