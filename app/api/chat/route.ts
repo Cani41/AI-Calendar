@@ -88,128 +88,66 @@ const tools: Anthropic.Tool[] = [
 
 const ETYOVUOROT_CALENDAR_ID = "cufrl83s2cnnf4bq5t46k282ms@group.calendar.google.com";
 
-export async function POST(request: NextRequest) {
-  try {
-    const { messages, image } = await request.json();
-    const tokens = request.cookies.get("google_tokens")?.value;
+const encoder = new TextEncoder();
 
-    if (!tokens) {
-      return NextResponse.json({ reply: "Kirjaudu ensin Google-tilille.", relogin: true });
-    }
-
-    const auth = getOAuthClient(tokens);
-
-    // Päivitä access token jos se on vanhentunut tai vanhenee pian
-    let refreshedTokens: string | null = null;
-    const parsed = JSON.parse(tokens);
-    if (parsed.expiry_date && parsed.expiry_date < Date.now() + 60_000) {
-      try {
-        const { credentials } = await auth.refreshAccessToken();
-        auth.setCredentials(credentials);
-        refreshedTokens = JSON.stringify(credentials);
-      } catch {
-        return NextResponse.json({ reply: "Istuntosi on vanhentunut. Ole hyvä ja kirjaudu uudelleen.", relogin: true });
-      }
-    }
-
-    const calendar = google.calendar({ version: "v3", auth });
-
-    // Kuvavirta: tunnista työvuorot ja lisää kalenteriin
-    if (image) {
-      const visionResponse = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 2000,
-        messages: [{
-          role: "user",
-          content: [
-            {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: image.mediaType as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
-                data: image.data,
-              },
-            },
-            {
-              type: "text",
-              text: `Analysoi tämä työvuorolista. Tunnista kaikki työvuorot ja palauta ne täsmälleen tässä JSON-muodossa, ei mitään muuta tekstiä:
-{
-  "shifts": [
-    { "date": "YYYY-MM-DD", "startTime": "HH:MM", "endTime": "HH:MM" }
-  ]
+function send(obj: object): Uint8Array {
+  return encoder.encode(JSON.stringify(obj) + "\n");
 }
-Tänään on ${new Date().toISOString().slice(0, 10)}. Jos kuvassa ei näy vuotta, käytä kuluvaa vuotta. Jos et löydä työvuoroja, palauta { "shifts": [] }.`,
-            },
-          ],
-        }],
-      });
 
-      const raw = visionResponse.content[0].type === "text" ? visionResponse.content[0].text : "";
-      let shifts: { date: string; startTime: string; endTime: string }[] = [];
-
+function iteratorToStream(iterator: AsyncGenerator<Uint8Array>): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    async pull(controller) {
       try {
-        const match = raw.match(/\{[\s\S]*\}/);
-        if (match) shifts = JSON.parse(match[0]).shifts ?? [];
-      } catch {
-        return NextResponse.json({ reply: "En pystynyt lukemaan työvuoroja kuvasta. Varmista että kuva on selkeä työvuorolista." });
-      }
-
-      if (shifts.length === 0) {
-        return NextResponse.json({ reply: "En löytänyt kuvasta työvuoroja. Varmista että kuva sisältää työvuorolistan." });
-      }
-
-      let created = 0;
-      const failed: string[] = [];
-
-      for (const shift of shifts) {
-        try {
-          await calendar.events.insert({
-            calendarId: ETYOVUOROT_CALENDAR_ID,
-            requestBody: {
-              summary: "Työvuoro",
-              start: { dateTime: `${shift.date}T${shift.startTime}:00`, timeZone: "Europe/Helsinki" },
-              end: { dateTime: `${shift.date}T${shift.endTime}:00`, timeZone: "Europe/Helsinki" },
-            },
-          });
-          created++;
-        } catch {
-          failed.push(`${shift.date} ${shift.startTime}–${shift.endTime}`);
+        const { value, done } = await iterator.next();
+        if (done) {
+          controller.close();
+        } else {
+          controller.enqueue(value);
         }
+      } catch (e) {
+        controller.error(e);
       }
+    },
+  });
+}
 
-      let reply = `Tunnistin kuvasta **${shifts.length} työvuoroa** ja lisäsin **${created}** Elisa Työvuorot -kalenteriin.`;
-      if (failed.length > 0) {
-        reply += `\n\nEpäonnistui:\n${failed.map((f) => `- ${f}`).join("\n")}`;
-      }
+export async function POST(request: NextRequest) {
+  const { messages, image } = await request.json();
+  const tokens = request.cookies.get("google_tokens")?.value;
 
-      const shiftList = shifts
-        .map((s) => `- ${formatFinnishDateTime(`${s.date}T${s.startTime}:00`).replace(",", "")} – ${s.endTime}`)
-        .join("\n");
-      reply += `\n\n**Lisätyt vuorot:**\n${shiftList}`;
+  if (!tokens) {
+    return NextResponse.json({ reply: "Kirjaudu ensin Google-tilille.", relogin: true });
+  }
 
-      const imgResponse = NextResponse.json({ reply });
-      if (refreshedTokens) {
-        imgResponse.cookies.set("google_tokens", refreshedTokens, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === "production",
-          maxAge: 60 * 60 * 24 * 7,
-        });
-      }
-      return imgResponse;
+  const auth = getOAuthClient(tokens);
+  let refreshedTokens: string | null = null;
+  const parsed = JSON.parse(tokens);
+
+  if (parsed.expiry_date && parsed.expiry_date < Date.now() + 60_000) {
+    try {
+      const { credentials } = await auth.refreshAccessToken();
+      auth.setCredentials(credentials);
+      refreshedTokens = JSON.stringify(credentials);
+    } catch {
+      return NextResponse.json({
+        reply: "Istuntosi on vanhentunut. Ole hyvä ja kirjaudu uudelleen.",
+        relogin: true,
+      });
     }
+  }
 
-    const anthropicMessages: Anthropic.MessageParam[] = messages.map(
-      (m: { role: string; content: string }) => ({
-        role: m.role as "user" | "assistant",
-        content: m.content,
-      })
+  const calendar = google.calendar({ version: "v3", auth });
+
+  const streamHeaders = new Headers({ "Content-Type": "application/x-ndjson" });
+  if (refreshedTokens) {
+    const prod = process.env.NODE_ENV === "production";
+    streamHeaders.append(
+      "Set-Cookie",
+      `google_tokens=${encodeURIComponent(refreshedTokens)}; HttpOnly; Max-Age=${60 * 60 * 24 * 7}; Path=/; SameSite=Lax${prod ? "; Secure" : ""}`
     );
+  }
 
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 1000,
-      tools,
-      system: `Olet Bantu, avulias kalenteri-assistentti. Tänään on ${new Date().toISOString()}.
+  const systemPrompt = `Olet Bantu, avulias kalenteri-assistentti. Tänään on ${new Date().toISOString()}.
 Vastaa aina suomeksi.
 
 KALENTERIEN ID:T:
@@ -237,26 +175,132 @@ TÄRKEÄT SÄÄNNÖT:
   • Lisätä tapahtumia kalenteriin
   • Hakea tulevia tapahtumia
   • Muokata tai poistaa tapahtumia
-  • Kertoa työvuoroista, juhlapyhistä tai opinnoista`,
-      messages: anthropicMessages,
-    });
+  • Kertoa työvuoroista, juhlapyhistä tai opinnoista`;
 
-    let reply = "";
-    const toolResults: Anthropic.MessageParam[] = [];
+  async function* generate(): AsyncGenerator<Uint8Array> {
+    try {
+      // Image handling
+      if (image) {
+        const visionResponse = await anthropic.messages.create({
+          model: "claude-sonnet-4-6",
+          max_tokens: 2000,
+          messages: [{
+            role: "user",
+            content: [
+              {
+                type: "image",
+                source: {
+                  type: "base64",
+                  media_type: image.mediaType as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+                  data: image.data,
+                },
+              },
+              {
+                type: "text",
+                text: `Analysoi tämä työvuorolista. Tunnista kaikki työvuorot ja palauta ne täsmälleen tässä JSON-muodossa, ei mitään muuta tekstiä:
+{
+  "shifts": [
+    { "date": "YYYY-MM-DD", "startTime": "HH:MM", "endTime": "HH:MM" }
+  ]
+}
+Tänään on ${new Date().toISOString().slice(0, 10)}. Jos kuvassa ei näy vuotta, käytä kuluvaa vuotta. Jos et löydä työvuoroja, palauta { "shifts": [] }.`,
+              },
+            ],
+          }],
+        });
 
-    for (const block of response.content) {
-      if (block.type === "text") {
-        reply = block.text;
-      } else if (block.type === "tool_use") {
+        const raw = visionResponse.content[0].type === "text" ? visionResponse.content[0].text : "";
+        let shifts: { date: string; startTime: string; endTime: string }[] = [];
+
+        try {
+          const match = raw.match(/\{[\s\S]*\}/);
+          if (match) shifts = JSON.parse(match[0]).shifts ?? [];
+        } catch {
+          yield send({ type: "delta", text: "En pystynyt lukemaan työvuoroja kuvasta. Varmista että kuva on selkeä työvuorolista." });
+          yield send({ type: "done" });
+          return;
+        }
+
+        if (shifts.length === 0) {
+          yield send({ type: "delta", text: "En löytänyt kuvasta työvuoroja. Varmista että kuva sisältää työvuorolistan." });
+          yield send({ type: "done" });
+          return;
+        }
+
+        let created = 0;
+        const failed: string[] = [];
+
+        for (const shift of shifts) {
+          try {
+            await calendar.events.insert({
+              calendarId: ETYOVUOROT_CALENDAR_ID,
+              requestBody: {
+                summary: "Työvuoro",
+                start: { dateTime: `${shift.date}T${shift.startTime}:00`, timeZone: "Europe/Helsinki" },
+                end: { dateTime: `${shift.date}T${shift.endTime}:00`, timeZone: "Europe/Helsinki" },
+              },
+            });
+            created++;
+          } catch {
+            failed.push(`${shift.date} ${shift.startTime}–${shift.endTime}`);
+          }
+        }
+
+        let reply = `Tunnistin kuvasta **${shifts.length} työvuoroa** ja lisäsin **${created}** Elisa Työvuorot -kalenteriin.`;
+        if (failed.length > 0) {
+          reply += `\n\nEpäonnistui:\n${failed.map((f) => `- ${f}`).join("\n")}`;
+        }
+
+        const shiftList = shifts
+          .map((s) => `- ${formatFinnishDateTime(`${s.date}T${s.startTime}:00`).replace(",", "")} – ${s.endTime}`)
+          .join("\n");
+        reply += `\n\n**Lisätyt vuorot:**\n${shiftList}`;
+
+        yield send({ type: "delta", text: reply });
+        yield send({ type: "done" });
+        return;
+      }
+
+      const anthropicMessages: Anthropic.MessageParam[] = messages.map(
+        (m: { role: string; content: string }) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        })
+      );
+
+      // First call — stream text directly if Claude responds with text,
+      // or collect tool use blocks if it calls a tool.
+      const firstStream = anthropic.messages.stream({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        tools,
+        system: systemPrompt,
+        messages: anthropicMessages,
+      });
+
+      let firstHasText = false;
+
+      for await (const event of firstStream) {
+        if (event.type === "content_block_start" && event.content_block.type === "text") {
+          firstHasText = true;
+        }
+        if (event.type === "content_block_delta" && event.delta.type === "text_delta" && firstHasText) {
+          yield send({ type: "delta", text: event.delta.text });
+        }
+      }
+
+      const firstResponse = await firstStream.finalMessage();
+
+      // Execute any tool calls from the first response
+      const toolResults: Anthropic.MessageParam[] = [];
+      let directReply = "";
+
+      for (const block of firstResponse.content) {
+        if (block.type !== "tool_use") continue;
+
         if (block.name === "create_calendar_event") {
-          const input = block.input as {
-            title: string;
-            start: string;
-            end: string;
-            description?: string;
-          };
+          const input = block.input as { title: string; start: string; end: string; description?: string };
 
-          // Duplikaattitarkistus: sama otsikko samana päivänä
           const startDate = new Date(input.start);
           const dayStart = new Date(startDate);
           dayStart.setHours(0, 0, 0, 0);
@@ -277,7 +321,7 @@ TÄRKEÄT SÄÄNNÖT:
           if (duplicate) {
             const dupStart = duplicate.start?.dateTime || duplicate.start?.date;
             const dupEnd = duplicate.end?.dateTime || duplicate.end?.date;
-            reply =
+            directReply =
               `Samankaltainen tapahtuma löytyy jo kalenteristasi:\n\n` +
               `**${duplicate.summary}**\n` +
               `Alkaa: ${formatFinnishDateTime(dupStart)}\n` +
@@ -293,7 +337,7 @@ TÄRKEÄT SÄÄNNÖT:
                 end: { dateTime: input.end, timeZone: "Europe/Helsinki" },
               },
             });
-            reply = `Tapahtuma "${input.title}" lisätty kalenteriin.`;
+            directReply = `Tapahtuma "${input.title}" lisätty kalenteriin.`;
           }
 
         } else if (block.name === "get_calendar_events") {
@@ -337,100 +381,82 @@ TÄRKEÄT SÄÄNNÖT:
 
         } else if (block.name === "delete_calendar_event") {
           const input = block.input as { event_id: string; event_title: string };
-
-          await calendar.events.delete({
-            calendarId: "primary",
-            eventId: input.event_id,
-          });
-
-          reply = `Tapahtuma "${input.event_title}" poistettu kalenterista.`;
+          await calendar.events.delete({ calendarId: "primary", eventId: input.event_id });
+          directReply = `Tapahtuma "${input.event_title}" poistettu kalenterista.`;
 
         } else if (block.name === "update_calendar_event") {
-          const input = block.input as {
-            event_id: string;
-            title?: string;
-            start?: string;
-            end?: string;
-            description?: string;
-          };
-
+          const input = block.input as { event_id: string; title?: string; start?: string; end?: string; description?: string };
           const patch: Record<string, unknown> = {};
           if (input.title) patch.summary = input.title;
           if (input.description !== undefined) patch.description = input.description;
           if (input.start) patch.start = { dateTime: input.start, timeZone: "Europe/Helsinki" };
           if (input.end) patch.end = { dateTime: input.end, timeZone: "Europe/Helsinki" };
-
-          await calendar.events.patch({
-            calendarId: "primary",
-            eventId: input.event_id,
-            requestBody: patch,
-          });
-
-          reply = `Tapahtuma päivitetty.`;
+          await calendar.events.patch({ calendarId: "primary", eventId: input.event_id, requestBody: patch });
+          directReply = "Tapahtuma päivitetty.";
         }
       }
-    }
 
-    if (toolResults.length > 0) {
-      const followUp = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1000,
-        tools,
-        system: `Olet Bantu, avulias kalenteri-assistentti. Tänään on ${new Date().toISOString()}. Vastaa aina suomeksi. Älä käytä emojeita.`,
-        messages: [
-          ...anthropicMessages,
-          { role: "assistant", content: response.content },
-          ...toolResults,
-        ],
-      });
+      if (directReply) {
+        yield send({ type: "delta", text: directReply });
+      } else if (toolResults.length > 0) {
+        // Follow-up call after get_calendar_events — stream the formatted response
+        const followUpStream = anthropic.messages.stream({
+          model: "claude-sonnet-4-6",
+          max_tokens: 1000,
+          tools,
+          system: `Olet Bantu, avulias kalenteri-assistentti. Tänään on ${new Date().toISOString()}. Vastaa aina suomeksi. Älä käytä emojeita.`,
+          messages: [
+            ...anthropicMessages,
+            { role: "assistant", content: firstResponse.content },
+            ...toolResults,
+          ],
+        });
 
-      for (const block of followUp.content) {
-        if (block.type === "text") {
-          reply = block.text;
-        } else if (block.type === "tool_use" && block.name === "delete_calendar_event") {
-          const input = block.input as { event_id: string; event_title: string };
-          await calendar.events.delete({
-            calendarId: "primary",
-            eventId: input.event_id,
-          });
-          reply = `Tapahtuma "${input.event_title}" poistettu kalenterista.`;
-        } else if (block.type === "tool_use" && block.name === "update_calendar_event") {
-          const input = block.input as {
-            event_id: string;
-            title?: string;
-            start?: string;
-            end?: string;
-            description?: string;
-          };
+        let followUpHasText = false;
 
-          const patch: Record<string, unknown> = {};
-          if (input.title) patch.summary = input.title;
-          if (input.description !== undefined) patch.description = input.description;
-          if (input.start) patch.start = { dateTime: input.start, timeZone: "Europe/Helsinki" };
-          if (input.end) patch.end = { dateTime: input.end, timeZone: "Europe/Helsinki" };
+        for await (const event of followUpStream) {
+          if (event.type === "content_block_start" && event.content_block.type === "text") {
+            followUpHasText = true;
+          }
+          if (event.type === "content_block_delta" && event.delta.type === "text_delta" && followUpHasText) {
+            yield send({ type: "delta", text: event.delta.text });
+          }
+        }
 
-          await calendar.events.patch({
-            calendarId: "primary",
-            eventId: input.event_id,
-            requestBody: patch,
-          });
+        const followUpResponse = await followUpStream.finalMessage();
 
-          reply = `Tapahtuma päivitetty.`;
+        // Handle delete/update tool calls in the follow-up (e.g. delete after get)
+        let followUpDirectReply = "";
+        for (const block of followUpResponse.content) {
+          if (block.type !== "tool_use") continue;
+
+          if (block.name === "delete_calendar_event") {
+            const input = block.input as { event_id: string; event_title: string };
+            await calendar.events.delete({ calendarId: "primary", eventId: input.event_id });
+            followUpDirectReply = `Tapahtuma "${input.event_title}" poistettu kalenterista.`;
+          } else if (block.name === "update_calendar_event") {
+            const input = block.input as { event_id: string; title?: string; start?: string; end?: string; description?: string };
+            const patch: Record<string, unknown> = {};
+            if (input.title) patch.summary = input.title;
+            if (input.description !== undefined) patch.description = input.description;
+            if (input.start) patch.start = { dateTime: input.start, timeZone: "Europe/Helsinki" };
+            if (input.end) patch.end = { dateTime: input.end, timeZone: "Europe/Helsinki" };
+            await calendar.events.patch({ calendarId: "primary", eventId: input.event_id, requestBody: patch });
+            followUpDirectReply = "Tapahtuma päivitetty.";
+          }
+        }
+
+        if (followUpDirectReply) {
+          yield send({ type: "delta", text: followUpDirectReply });
         }
       }
-    }
 
-    const jsonResponse = NextResponse.json({ reply });
-    if (refreshedTokens) {
-      jsonResponse.cookies.set("google_tokens", refreshedTokens, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        maxAge: 60 * 60 * 24 * 7,
-      });
+      yield send({ type: "done" });
+    } catch (error) {
+      console.error("Stream error:", error);
+      yield send({ type: "error", message: "Verkkovirhe — tarkista yhteytesi ja yritä uudelleen." });
     }
-    return jsonResponse;
-  } catch (error) {
-    console.error("API error:", error);
-    return NextResponse.json({ reply: "Virhe: " + String(error) }, { status: 500 });
   }
+
+  return new Response(iteratorToStream(generate()), { headers: streamHeaders });
 }

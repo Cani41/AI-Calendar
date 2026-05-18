@@ -102,18 +102,62 @@ export default function Dashboard() {
         }),
       });
 
-      const data = await res.json();
-      setMessages([...updatedMessages, { role: "assistant", content: data.reply }]);
-
-      if (data.relogin) {
-        setTimeout(() => (window.location.href = "/"), 2000);
+      // Auth errors come back as plain JSON
+      if (res.headers.get("content-type")?.includes("application/json")) {
+        const data = await res.json();
+        setMessages([...updatedMessages, { role: "assistant", content: data.reply }]);
+        if (data.relogin) setTimeout(() => (window.location.href = "/"), 2000);
+        setLoading(false);
+        return;
       }
+
+      // NDJSON stream
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let assistantAdded = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          let event: { type: string; text?: string; message?: string };
+          try {
+            event = JSON.parse(line);
+          } catch {
+            continue;
+          }
+
+          if (event.type === "delta" && event.text) {
+            if (!assistantAdded) {
+              setMessages((prev) => [...prev, { role: "assistant", content: event.text! }]);
+              assistantAdded = true;
+              setLoading(false);
+            } else {
+              setMessages((prev) => {
+                const last = prev[prev.length - 1];
+                return [...prev.slice(0, -1), { ...last, content: last.content + event.text! }];
+              });
+            }
+          } else if (event.type === "error") {
+            setMessages((prev) => [...prev, { role: "assistant", content: event.message ?? "Tuntematon virhe." }]);
+            setLoading(false);
+          }
+        }
+      }
+
+      if (!assistantAdded) setLoading(false);
     } catch {
       setMessages([...updatedMessages, {
         role: "assistant",
         content: "Verkkovirhe — tarkista yhteytesi ja yritä uudelleen.",
       }]);
-    } finally {
       setLoading(false);
     }
   }
