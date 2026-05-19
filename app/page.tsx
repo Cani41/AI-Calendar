@@ -1,6 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+const errorMessages: Record<string, string> = {
+  state_mismatch: "Kirjautumisistunto vanheni — yritä uudelleen.",
+  auth_failed: "Kirjautuminen epäonnistui — yritä uudelleen.",
+  missing_code: "Kirjautuminen keskeytyi — yritä uudelleen.",
+};
 
 function BantuLogo() {
   return (
@@ -69,6 +75,12 @@ const features = [
 
 export default function Home() {
   const [loading, setLoading] = useState(false);
+  const [errorKey, setErrorKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    const err = new URLSearchParams(window.location.search).get("error");
+    if (err && errorMessages[err]) setErrorKey(err);
+  }, []);
 
   return (
     <div className="flex h-dvh bg-[#05050a] text-white font-[450] justify-center items-center sm:p-5">
@@ -101,6 +113,9 @@ export default function Home() {
 
         {/* CTA */}
         <div className="flex flex-col items-center gap-2.5 w-full">
+          {errorKey && (
+            <p className="text-amber-400 text-[11px] text-center">{errorMessages[errorKey]}</p>
+          )}
           <a
             href="/api/auth/google"
             onClick={() => setLoading(true)}
