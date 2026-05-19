@@ -31,6 +31,10 @@ const tools: Anthropic.Tool[] = [
           type: "string",
           description: 'Kohdekalenterin id. Käytä "primary" pääkalenteriin tai yksi käyttäjän kalentereista. Oletus "primary".',
         },
+        allow_duplicate: {
+          type: "boolean",
+          description: "Aseta true vain kun käyttäjä on nimenomaan vahvistanut samannimisen päällekkäisen tapahtuman lisäämisen. Oletus false — silloin samanniminen päällekkäinen tapahtuma estää lisäyksen.",
+        },
       },
       required: ["title", "start", "end"],
     },
@@ -135,6 +139,7 @@ OHJEET:
 - Jos loppuaikaa ei mainita ja kyse on yhdestä aktiviteetista, käytä yhden tunnin oletusta.
 - Nimeä tapahtumat lyhyesti ja selkeästi.
 - Jos käyttäjä pyytää poistamaan tai muokkaamaan tapahtumaa, hae ensin get_calendar_events:lla oikean kalenterin id ja event_id, ja käytä niitä sitten poistossa/muokkauksessa.
+- Jos create_calendar_event palauttaa status="duplicate", älä yritä lisätä uudelleen samoin parametrein. Kerro käyttäjälle löytyneestä päällekkäisestä tapahtumasta ja kysy haluaako hän silti lisätä uuden — vasta vahvistuksen jälkeen kutsu uudelleen parametrilla allow_duplicate=true.
 
 KUVAN KÄSITTELY:
 - Jos viestissä on kuva ja siinä näkyy mitä tahansa tapahtumia, menoja, työvuoroja, aikatauluja, lippuja tai kutsuja, tunnista ne kaikki.
@@ -161,37 +166,39 @@ async function executeTool(
         end: string;
         description?: string;
         calendar_id?: string;
+        allow_duplicate?: boolean;
       };
       const calId = input.calendar_id || "primary";
 
-      const startDate = new Date(input.start);
-      const dayStart = new Date(startDate);
-      dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(startDate);
-      dayEnd.setHours(23, 59, 59, 999);
+      if (!input.allow_duplicate) {
+        const normalize = (s: string) => s.toLowerCase().trim().replace(/\s+/g, " ");
+        const newTitle = normalize(input.title);
 
-      const existing = await calendar.events.list({
-        calendarId: calId,
-        timeMin: dayStart.toISOString(),
-        timeMax: dayEnd.toISOString(),
-        singleEvents: true,
-      });
-
-      const duplicate = existing.data.items?.find(
-        (e) => e.summary?.toLowerCase() === input.title.toLowerCase()
-      );
-
-      if (duplicate) {
-        return JSON.stringify({
-          status: "duplicate",
-          existing: {
-            id: duplicate.id,
-            title: duplicate.summary,
-            start: duplicate.start?.dateTime || duplicate.start?.date,
-            end: duplicate.end?.dateTime || duplicate.end?.date,
-            description: duplicate.description,
-          },
+        const existing = await calendar.events.list({
+          calendarId: calId,
+          timeMin: input.start,
+          timeMax: input.end,
+          singleEvents: true,
         });
+
+        const duplicate = existing.data.items?.find(
+          (e) => e.summary && normalize(e.summary) === newTitle
+        );
+
+        if (duplicate) {
+          return JSON.stringify({
+            status: "duplicate",
+            message:
+              "Samanniminen ja päällekkäinen tapahtuma löytyi. Kerro käyttäjälle ja kysy halutaanko silti lisätä — jos kyllä, kutsu uudelleen parametrilla allow_duplicate=true.",
+            existing: {
+              id: duplicate.id,
+              title: duplicate.summary,
+              start: duplicate.start?.dateTime || duplicate.start?.date,
+              end: duplicate.end?.dateTime || duplicate.end?.date,
+              description: duplicate.description,
+            },
+          });
+        }
       }
 
       const created = await calendar.events.insert({
