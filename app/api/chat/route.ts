@@ -85,11 +85,11 @@ const tools: Anthropic.Tool[] = [
   },
 ];
 
-function getOAuthClient(tokens: string) {
+function getOAuthClient(tokens: string, redirectUri: string) {
   const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    process.env.NEXTAUTH_URL + "/api/auth/callback"
+    redirectUri
   );
   oauth2Client.setCredentials(JSON.parse(tokens));
   return oauth2Client;
@@ -304,7 +304,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ reply: "Kirjaudu ensin Google-tilille.", relogin: true });
   }
 
-  const auth = getOAuthClient(tokens);
+  const auth = getOAuthClient(tokens, `${request.nextUrl.origin}/api/auth/callback`);
   let refreshedTokens: string | null = null;
   const parsed = JSON.parse(tokens);
 
