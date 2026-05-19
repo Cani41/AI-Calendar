@@ -234,9 +234,7 @@ export default function Dashboard() {
 
         {/* Header */}
         <header className="flex-none px-6 py-4 border-b border-white/10 flex items-center gap-3">
-          {process.env.NEXT_PUBLIC_GIT_BRANCH !== "main" && (
-            <span className="absolute top-2 left-2 text-[10px] font-semibold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-md px-1.5 py-0.5 tracking-wide">DEV</span>
-          )}
+          <span className="absolute top-2 left-2 text-[10px] font-semibold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-md px-1.5 py-0.5 tracking-wide">DEV</span>
           <BantuAvatar className="w-8 h-8" />
           <div className="flex-1">
             <h1 className="text-[15px] font-semibold leading-none">Bantu</h1>
