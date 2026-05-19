@@ -79,6 +79,9 @@ export default function Home() {
 
   useEffect(() => {
     const err = new URLSearchParams(window.location.search).get("error");
+    // window.location ei ole saatavilla SSR-passissa, joten lukeminen
+    // joudutaan tekemään effectissä.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (err && errorMessages[err]) setErrorKey(err);
   }, []);
 

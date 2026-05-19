@@ -35,14 +35,17 @@ type PendingImage = {
   url: string;       // data URL esikatselua varten
 };
 
-export default function Dashboard() {
-  const STORAGE_KEY = "chat_history";
+const STORAGE_KEY = "chat_history";
 
+export default function Dashboard() {
   const [messages, setMessages] = useState<Message[]>([]);
 
   useEffect(() => {
     try {
       const saved = sessionStorage.getItem(STORAGE_KEY);
+      // sessionStorage ei ole saatavilla SSR-passissa, joten alustus
+      // joudutaan tekemään effectissä ennen ensimmäistä renderiä.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (saved) setMessages(JSON.parse(saved));
     } catch {
       // sessionStorage ei käytettävissä
@@ -91,7 +94,7 @@ export default function Dashboard() {
   useEffect(() => {
     try {
       // Ei tallenneta base64-kuvia sessionStorageen
-      const toSave = messages.map(({ imageUrl: _, ...m }) => m);
+      const toSave = messages.map((m) => ({ role: m.role, content: m.content }));
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
     } catch {
       // sessionStorage ei käytettävissä
@@ -151,7 +154,7 @@ export default function Dashboard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: updatedMessages.map(({ imageUrl: _, ...m }) => m),
+          messages: updatedMessages.map((m) => ({ role: m.role, content: m.content })),
           image: pendingImage
             ? { data: pendingImage.data, mediaType: pendingImage.mediaType }
             : undefined,
@@ -277,6 +280,8 @@ export default function Dashboard() {
                   : "bg-[#181826] text-gray-100 px-4 py-3 rounded-[20px] rounded-bl-[4px] border border-white/8 shadow-md prose prose-invert prose-sm max-w-none"
               }`}>
                 {msg.imageUrl && (
+                  // next/image ei toimi base64 data-URL:eille — käytetään natiivia img-tagia.
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={msg.imageUrl}
                     alt="Lähetetty kuva"
@@ -319,6 +324,8 @@ export default function Dashboard() {
           {/* Kuvan esikatselu */}
           {pendingImage && (
             <div className="relative inline-block mb-2 ml-1">
+              {/* next/image ei toimi base64 data-URL:eille — käytetään natiivia img-tagia. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={pendingImage.url}
                 alt="Esikatselu"
