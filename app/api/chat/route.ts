@@ -137,7 +137,7 @@ OHJEET:
 - Jos käyttäjä pyytää poistamaan tai muokkaamaan tapahtumaa, hae ensin get_calendar_events:lla oikean kalenterin id ja event_id, ja käytä niitä sitten poistossa/muokkauksessa.
 
 KUVAN KÄSITTELY:
-- Jos viestissä on kuva ja siinä näkyy tapahtumia (työvuorot, aikataulu, lippu, kutsu yms.), tunnista ne kaikki.
+- Jos viestissä on kuva ja siinä näkyy mitä tahansa tapahtumia, menoja, työvuoroja, aikatauluja, lippuja tai kutsuja, tunnista ne kaikki.
 - Jos käyttäjä on kertonut viestissään mihin kalenteriin tapahtumat lisätään, lisää ne suoraan create_calendar_event-työkalulla.
 - Jos kohdekalenteri ei ole selvä, listaa ensin tunnistetut tapahtumat lyhyesti ja kysy käyttäjältä mihin kalenteriin lisätään. Älä lisää mitään ennen vastausta.
 
@@ -146,7 +146,7 @@ KOHTELIAISUUS:
   • Lisätä tapahtumia kalenteriin
   • Hakea tulevia tapahtumia
   • Muokata tai poistaa tapahtumia
-  • Lukea kuvasta työvuorot tai muut tapahtumat`;
+  • Lukea kuvasta tapahtumia, menoja tai aikatauluja`;
 }
 
 async function executeTool(

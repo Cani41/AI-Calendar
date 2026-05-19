@@ -257,7 +257,7 @@ export default function Dashboard() {
               </div>
               <p className="text-gray-300 font-medium">Mitä haluaisit tehdä?</p>
               <p className="text-gray-500 text-sm">
-                Voit lisätä, hakea tai poistaa tapahtumia — tai lähetä kuva työvuorolistasta.
+                Voit lisätä, hakea tai poistaa tapahtumia — tai lähetä kuva missä näkyy menoja tai aikatauluja.
               </p>
             </div>
           )}
@@ -383,7 +383,7 @@ export default function Dashboard() {
             </button>
           </div>
           <p className="hidden sm:block text-center text-[11px] text-gray-600 mt-2">
-            Enter lähettää · Shift+Enter uusi rivi · Kuvakkeella voit lähettää työvuorolistan
+            Enter lähettää · Shift+Enter uusi rivi · Kuvakkeella voit lähettää kuvan tapahtumista
           </p>
         </div>
 
