@@ -24,12 +24,25 @@ const tools: Anthropic.Tool[] = [
       type: "object" as const,
       properties: {
         title: { type: "string", description: "Tapahtuman nimi" },
-        start: { type: "string", description: "Alkamisaika ISO 8601 -muodossa" },
-        end: { type: "string", description: "Loppumisaika ISO 8601 -muodossa" },
+        start: {
+          type: "string",
+          description:
+            'Alkamisaika. Kellotapahtumalle ISO 8601 -muodossa (esim. "2026-07-15T10:00:00"). Koko päivän tapahtumalle pelkkä päivämäärä (esim. "2026-07-15").',
+        },
+        end: {
+          type: "string",
+          description:
+            'Loppumisaika. Kellotapahtumalle ISO 8601 -muodossa. Koko päivän tapahtumalle EKSKLUSIIVINEN loppupäivä — esim. tapahtumalle joka kestää 15.–25.7. käytä end="2026-07-26".',
+        },
         description: { type: "string", description: "Lisätiedot" },
         calendar_id: {
           type: "string",
           description: 'Kohdekalenterin id. Käytä "primary" pääkalenteriin tai yksi käyttäjän kalentereista. Oletus "primary".',
+        },
+        all_day: {
+          type: "boolean",
+          description:
+            "Aseta true kun tapahtuma kestää koko päivän tai useita kokonaisia päiviä (esim. lomat, syntymäpäivät, varaukset). Oletus false (kellonaikoja sisältävä tapahtuma).",
         },
         allow_duplicate: {
           type: "boolean",
@@ -41,11 +54,24 @@ const tools: Anthropic.Tool[] = [
   },
   {
     name: "get_calendar_events",
-    description: "Hakee tapahtumat yhdestä tai useammasta kalenterista",
+    description: "Hakee tapahtumat yhdestä tai useammasta kalenterista. Tukee menneitä ja tulevia hakuja sekä tekstihakua.",
     input_schema: {
       type: "object" as const,
       properties: {
-        days: { type: "number", description: "Kuinka monelta päivältä eteenpäin haetaan, oletus 30" },
+        from: {
+          type: "string",
+          description:
+            'Aikaikkunan alku ISO 8601 -muodossa tai päivämääränä. Oletus = nyt (vain tulevat tapahtumat). Anna menneisyydessä oleva arvo (esim. "2026-01-01") jos käyttäjä kysyy menneitä tapahtumia.',
+        },
+        to: {
+          type: "string",
+          description: "Aikaikkunan loppu ISO 8601 -muodossa tai päivämääränä. Oletus = 30 päivää from:sta eteenpäin.",
+        },
+        query: {
+          type: "string",
+          description:
+            'Vapaa tekstihaku tapahtuman otsikosta, kuvauksesta, sijainnista ja osallistujista. Käytä kun käyttäjä etsii tapahtumaa nimeltä, esim. "Mikon tapaaminen" tai "Pariisi". Älä käytä jos haet kaikkia tapahtumia aikaikkunalta.',
+        },
         calendar_ids: {
           type: "array",
           items: { type: "string" },
@@ -76,9 +102,20 @@ const tools: Anthropic.Tool[] = [
         event_id: { type: "string", description: "Muokattavan tapahtuman id" },
         calendar_id: { type: "string", description: 'Kalenterin id jossa tapahtuma sijaitsee. Oletus "primary".' },
         title: { type: "string", description: "Uusi nimi" },
-        start: { type: "string", description: "Uusi alkamisaika ISO 8601" },
-        end: { type: "string", description: "Uusi loppumisaika ISO 8601" },
+        start: {
+          type: "string",
+          description:
+            'Uusi alkamisaika. Kellotapahtumalle ISO 8601, koko päivän tapahtumalle pelkkä päivämäärä ("YYYY-MM-DD").',
+        },
+        end: {
+          type: "string",
+          description: "Uusi loppumisaika. Koko päivän tapahtumalla EKSKLUSIIVINEN loppupäivä.",
+        },
         description: { type: "string", description: "Uudet lisätiedot" },
+        all_day: {
+          type: "boolean",
+          description: "Aseta true jos tapahtuma muunnetaan koko päivän tapahtumaksi tai uudet päivät ovat koko päivän formaatissa.",
+        },
       },
       required: ["event_id"],
     },
@@ -131,6 +168,15 @@ OHJEET:
 - Jos käyttäjä pyytää poistamaan tai muokkaamaan tapahtumaa, hae ensin get_calendar_events:lla oikean kalenterin id ja event_id, ja käytä niitä sitten poistossa/muokkauksessa.
 - Jos create_calendar_event palauttaa status="duplicate", älä yritä lisätä uudelleen samoin parametrein. Kerro käyttäjälle löytyneestä päällekkäisestä tapahtumasta ja kysy haluaako hän silti lisätä uuden — vasta vahvistuksen jälkeen kutsu uudelleen parametrilla allow_duplicate=true.
 
+KOKO PÄIVÄN TAPAHTUMAT:
+- Kun käyttäjä mainitsee koko päivän tapahtuman (lomat, syntymäpäivät, useamman päivän matkat, varaukset), aseta all_day=true.
+- Anna start ja end päivämääräinä ("YYYY-MM-DD"), ei kellonajan kanssa.
+- end on EKSKLUSIIVINEN: tapahtumalle joka kestää 15.–25.7. käytä start="2026-07-15", end="2026-07-26". Yhden päivän tapahtumalle 15.7. käytä start="2026-07-15", end="2026-07-16".
+
+HAKU:
+- Kun käyttäjä kysyy menneitä tapahtumia ("milloin oli…", "viime kuussa", "viime viikolla"), aseta from-parametri menneisyyteen. Esim. "viime kuukauden tapahtumat" → from=kuukausi sitten, to=nyt.
+- Kun käyttäjä etsii tapahtumaa nimeltä tai aiheelta ("milloin oli Mikon tapaaminen", "Pariisin matka"), käytä query-parametria. Aseta from riittävän pitkälle menneisyyteen (esim. vuosi taaksepäin) jos epäselvä milloin tapahtuma on ollut.
+
 KUVAN KÄSITTELY:
 - Jos viestissä on kuva ja siinä näkyy mitä tahansa tapahtumia, menoja, työvuoroja, aikatauluja, lippuja tai kutsuja, tunnista ne kaikki.
 - Jos käyttäjä on kertonut viestissään mihin kalenteriin tapahtumat lisätään, lisää ne suoraan create_calendar_event-työkalulla.
@@ -142,6 +188,19 @@ KOHTELIAISUUS:
   • Hakea tulevia tapahtumia
   • Muokata tai poistaa tapahtumia
   • Lukea kuvasta tapahtumia, menoja tai aikatauluja`;
+}
+
+function buildEventTime(
+  value: string,
+  allDay: boolean
+): calendar_v3.Schema$EventDateTime {
+  return allDay
+    ? { date: value.slice(0, 10) }
+    : { dateTime: value, timeZone: "Europe/Helsinki" };
+}
+
+function toISOTimestamp(s: string): string {
+  return new Date(s.includes("T") ? s : `${s}T00:00:00Z`).toISOString();
 }
 
 async function executeTool(
@@ -156,9 +215,11 @@ async function executeTool(
         end: string;
         description?: string;
         calendar_id?: string;
+        all_day?: boolean;
         allow_duplicate?: boolean;
       };
       const calId = input.calendar_id || "primary";
+      const allDay = input.all_day ?? false;
 
       if (!input.allow_duplicate) {
         const normalize = (s: string) => s.toLowerCase().trim().replace(/\s+/g, " ");
@@ -166,8 +227,8 @@ async function executeTool(
 
         const existing = await calendar.events.list({
           calendarId: calId,
-          timeMin: input.start,
-          timeMax: input.end,
+          timeMin: toISOTimestamp(input.start),
+          timeMax: toISOTimestamp(input.end),
           singleEvents: true,
         });
 
@@ -196,8 +257,8 @@ async function executeTool(
         requestBody: {
           summary: input.title,
           description: input.description,
-          start: { dateTime: input.start, timeZone: "Europe/Helsinki" },
-          end: { dateTime: input.end, timeZone: "Europe/Helsinki" },
+          start: buildEventTime(input.start, allDay),
+          end: buildEventTime(input.end, allDay),
         },
       });
 
@@ -207,39 +268,55 @@ async function executeTool(
         title: input.title,
         start: input.start,
         end: input.end,
+        all_day: allDay,
         calendar_id: calId,
       });
     }
 
     if (block.name === "get_calendar_events") {
-      const input = block.input as { days?: number; calendar_ids?: string[] };
-      const days = input.days ?? 30;
-      const timeMax = new Date();
-      timeMax.setDate(timeMax.getDate() + days);
+      const input = block.input as {
+        from?: string;
+        to?: string;
+        query?: string;
+        calendar_ids?: string[];
+      };
+
+      const timeMin = input.from ? toISOTimestamp(input.from) : new Date().toISOString();
+      const timeMax = input.to
+        ? toISOTimestamp(input.to)
+        : new Date(new Date(timeMin).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
       const ids = input.calendar_ids?.length ? input.calendar_ids : ["primary"];
       const all: object[] = [];
 
-      for (const id of ids) {
-        try {
-          const events = await calendar.events.list({
-            calendarId: id,
-            timeMin: new Date().toISOString(),
-            timeMax: timeMax.toISOString(),
-            singleEvents: true,
-            orderBy: "startTime",
+      const lists = await Promise.all(
+        ids.map((id) =>
+          calendar.events
+            .list({
+              calendarId: id,
+              timeMin,
+              timeMax,
+              q: input.query,
+              singleEvents: true,
+              orderBy: "startTime",
+            })
+            .then((res) => ({ id, items: res.data.items ?? [] }))
+            .catch(() => ({ id, items: [] as calendar_v3.Schema$Event[] }))
+        )
+      );
+
+      for (const { id, items } of lists) {
+        for (const e of items) {
+          all.push({
+            id: e.id,
+            title: e.summary,
+            start: e.start?.dateTime || e.start?.date,
+            end: e.end?.dateTime || e.end?.date,
+            all_day: !!e.start?.date && !e.start?.dateTime,
+            location: e.location,
+            description: e.description,
+            calendar_id: id,
           });
-          for (const e of events.data.items ?? []) {
-            all.push({
-              id: e.id,
-              title: e.summary,
-              start: e.start?.dateTime || e.start?.date,
-              end: e.end?.dateTime || e.end?.date,
-              calendar_id: id,
-            });
-          }
-        } catch {
-          // skip inaccessible calendar
         }
       }
 
@@ -261,13 +338,15 @@ async function executeTool(
         start?: string;
         end?: string;
         description?: string;
+        all_day?: boolean;
       };
       const calId = input.calendar_id || "primary";
+      const allDay = input.all_day ?? false;
       const patch: Record<string, unknown> = {};
       if (input.title) patch.summary = input.title;
       if (input.description !== undefined) patch.description = input.description;
-      if (input.start) patch.start = { dateTime: input.start, timeZone: "Europe/Helsinki" };
-      if (input.end) patch.end = { dateTime: input.end, timeZone: "Europe/Helsinki" };
+      if (input.start) patch.start = buildEventTime(input.start, allDay);
+      if (input.end) patch.end = buildEventTime(input.end, allDay);
       await calendar.events.patch({ calendarId: calId, eventId: input.event_id, requestBody: patch });
       return JSON.stringify({ status: "updated", event_id: input.event_id });
     }
