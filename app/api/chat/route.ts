@@ -85,16 +85,6 @@ const tools: Anthropic.Tool[] = [
   },
 ];
 
-function getOAuthClient(tokens: string, redirectUri: string) {
-  const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    redirectUri
-  );
-  oauth2Client.setCredentials(JSON.parse(tokens));
-  return oauth2Client;
-}
-
 function buildSystemPrompt(calendars: StoredCalendar[]): string {
   const helsinkiNow = new Date().toLocaleString("fi-FI", {
     timeZone: "Europe/Helsinki",
@@ -297,18 +287,29 @@ function send(obj: object): Uint8Array {
 
 export async function POST(request: NextRequest) {
   const { messages, image } = await request.json();
-  const tokens = request.cookies.get("google_tokens")?.value;
+  const tokensRaw = request.cookies.get("google_tokens")?.value;
   const calendarsCookie = request.cookies.get("bantu_calendars")?.value;
 
-  if (!tokens) {
+  if (!tokensRaw) {
     return NextResponse.json({ reply: "Kirjaudu ensin Google-tilille.", relogin: true });
   }
 
-  const auth = getOAuthClient(tokens, `${request.nextUrl.origin}/api/auth/callback`);
-  let refreshedTokens: string | null = null;
-  const parsed = JSON.parse(tokens);
+  let parsedTokens: { expiry_date?: number; access_token?: string; refresh_token?: string };
+  try {
+    parsedTokens = JSON.parse(tokensRaw);
+  } catch {
+    return NextResponse.json({ reply: "Kirjaudu ensin Google-tilille.", relogin: true });
+  }
 
-  if (parsed.expiry_date && parsed.expiry_date < Date.now() + 60_000) {
+  const auth = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    `${request.nextUrl.origin}/api/auth/callback`
+  );
+  auth.setCredentials(parsedTokens);
+  let refreshedTokens: string | null = null;
+
+  if (parsedTokens.expiry_date && parsedTokens.expiry_date < Date.now() + 60_000) {
     try {
       const { credentials } = await auth.refreshAccessToken();
       auth.setCredentials(credentials);
