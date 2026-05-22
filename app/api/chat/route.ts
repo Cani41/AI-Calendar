@@ -1,362 +1,22 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { google, calendar_v3 } from "googleapis";
+import { google } from "googleapis";
 import { NextRequest, NextResponse } from "next/server";
+
+import { tools } from "@/lib/anthropic/tools";
+import { buildSystemPrompt } from "@/lib/anthropic/system-prompt";
+import { executeTool } from "@/lib/google/calendar-tools";
+import {
+  createOAuthClient,
+  googleTokensSetCookieHeader,
+  type StoredCalendar,
+} from "@/lib/google/auth";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-type StoredCalendar = {
-  id: string;
-  name: string;
-  primary?: boolean;
-  accessRole: string;
-};
-
 const MAX_TOOL_ITERATIONS = 5;
 const MODEL = "claude-sonnet-4-6";
-
-const tools: Anthropic.Tool[] = [
-  {
-    name: "create_calendar_event",
-    description: "Luo tapahtuman käyttäjän valitsemaan kalenteriin",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        title: { type: "string", description: "Tapahtuman nimi" },
-        start: {
-          type: "string",
-          description:
-            'Alkamisaika. Kellotapahtumalle ISO 8601 -muodossa (esim. "2026-07-15T10:00:00"). Koko päivän tapahtumalle pelkkä päivämäärä (esim. "2026-07-15").',
-        },
-        end: {
-          type: "string",
-          description:
-            'Loppumisaika. Kellotapahtumalle ISO 8601 -muodossa. Koko päivän tapahtumalle EKSKLUSIIVINEN loppupäivä — esim. tapahtumalle joka kestää 15.–25.7. käytä end="2026-07-26".',
-        },
-        description: { type: "string", description: "Lisätiedot" },
-        calendar_id: {
-          type: "string",
-          description: 'Kohdekalenterin id. Käytä "primary" pääkalenteriin tai yksi käyttäjän kalentereista. Oletus "primary".',
-        },
-        all_day: {
-          type: "boolean",
-          description:
-            "Aseta true kun tapahtuma kestää koko päivän tai useita kokonaisia päiviä (esim. lomat, syntymäpäivät, varaukset). Oletus false (kellonaikoja sisältävä tapahtuma).",
-        },
-        allow_duplicate: {
-          type: "boolean",
-          description: "Aseta true vain kun käyttäjä on nimenomaan vahvistanut samannimisen päällekkäisen tapahtuman lisäämisen. Oletus false — silloin samanniminen päällekkäinen tapahtuma estää lisäyksen.",
-        },
-      },
-      required: ["title", "start", "end"],
-    },
-  },
-  {
-    name: "get_calendar_events",
-    description: "Hakee tapahtumat yhdestä tai useammasta kalenterista. Tukee menneitä ja tulevia hakuja sekä tekstihakua.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        from: {
-          type: "string",
-          description:
-            'Aikaikkunan alku ISO 8601 -muodossa tai päivämääränä. Oletus = nyt (vain tulevat tapahtumat). Anna menneisyydessä oleva arvo (esim. "2026-01-01") jos käyttäjä kysyy menneitä tapahtumia.',
-        },
-        to: {
-          type: "string",
-          description: "Aikaikkunan loppu ISO 8601 -muodossa tai päivämääränä. Oletus = 30 päivää from:sta eteenpäin.",
-        },
-        query: {
-          type: "string",
-          description:
-            'Vapaa tekstihaku tapahtuman otsikosta, kuvauksesta, sijainnista ja osallistujista. Käytä kun käyttäjä etsii tapahtumaa nimeltä, esim. "Mikon tapaaminen" tai "Pariisi". Älä käytä jos haet kaikkia tapahtumia aikaikkunalta.',
-        },
-        calendar_ids: {
-          type: "array",
-          items: { type: "string" },
-          description: 'Lista kalenterien id:istä. Oletus ["primary"].',
-        },
-      },
-      required: [],
-    },
-  },
-  {
-    name: "delete_calendar_event",
-    description: "Poistaa tapahtuman kalenterista",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        event_id: { type: "string", description: "Poistettavan tapahtuman id" },
-        calendar_id: { type: "string", description: 'Kalenterin id jossa tapahtuma sijaitsee. Oletus "primary".' },
-      },
-      required: ["event_id"],
-    },
-  },
-  {
-    name: "update_calendar_event",
-    description: "Muokkaa olemassa olevan tapahtuman tietoja",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        event_id: { type: "string", description: "Muokattavan tapahtuman id" },
-        calendar_id: { type: "string", description: 'Kalenterin id jossa tapahtuma sijaitsee. Oletus "primary".' },
-        title: { type: "string", description: "Uusi nimi" },
-        start: {
-          type: "string",
-          description:
-            'Uusi alkamisaika. Kellotapahtumalle ISO 8601, koko päivän tapahtumalle pelkkä päivämäärä ("YYYY-MM-DD").',
-        },
-        end: {
-          type: "string",
-          description: "Uusi loppumisaika. Koko päivän tapahtumalla EKSKLUSIIVINEN loppupäivä.",
-        },
-        description: { type: "string", description: "Uudet lisätiedot" },
-        all_day: {
-          type: "boolean",
-          description: "Aseta true jos tapahtuma muunnetaan koko päivän tapahtumaksi tai uudet päivät ovat koko päivän formaatissa.",
-        },
-      },
-      required: ["event_id"],
-    },
-  },
-];
-
-function buildSystemPrompt(calendars: StoredCalendar[]): string {
-  const helsinkiNow = new Date().toLocaleString("fi-FI", {
-    timeZone: "Europe/Helsinki",
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  const isoNow = new Date().toISOString();
-
-  const calendarLines =
-    calendars.length > 0
-      ? calendars
-          .map((c) => {
-            const labels: string[] = [];
-            if (c.primary) labels.push("oletus, primary");
-            if (c.accessRole === "reader") labels.push("vain luku");
-            const labelStr = labels.length ? ` (${labels.join(", ")})` : "";
-            return `- ${c.name}${labelStr} — id: ${c.id}`;
-          })
-          .join("\n")
-      : '- Ei kalenteritietoja saatavilla. Käytä id-arvoa "primary".';
-
-  return `Olet Bantu, avulias kalenteri-assistentti. Vastaa aina suomeksi. Älä käytä emojeita.
-
-AIKA:
-- Nyt on ${helsinkiNow} (Europe/Helsinki)
-- ISO-muodossa: ${isoNow}
-- Käytä aina Europe/Helsinki-aikavyöhykettä tapahtumien luonnissa, ellei käyttäjä erikseen pyydä muuta.
-
-KÄYTTÄJÄN KALENTERIT:
-${calendarLines}
-
-OHJEET:
-- Uudet tapahtumat lisätään oletuksena käyttäjän pääkalenteriin (calendar_id="primary"), ellei käyttäjä erikseen mainitse toista kalenteria nimellä.
-- Kun käyttäjä viittaa kalenteriin nimellä (esim. "työvuorot", "juhlapyhät", "opinnot"), valitse oikea kalenteri yllä olevasta listasta nimen perusteella ja käytä sen id:tä.
-- Älä yritä luoda tai muokata tapahtumia kalenteriin jonka accessRole on "vain luku".
-- Jos käyttäjä kysyy yleisesti tapahtumiaan ilman kalenterirajausta, hae omistuksessa olevista kalentereista (ei jaetuista vain-luku-kalentereista).
-- Hotellivaraukset, matkat ja yöpymiset ovat YKSI pitkäkestoinen tapahtuma — älä jaa niitä päiväksi kerrallaan.
-- Jos loppuaikaa ei mainita ja kyse on yhdestä aktiviteetista, käytä yhden tunnin oletusta.
-- Nimeä tapahtumat lyhyesti ja selkeästi.
-- Jos käyttäjä pyytää poistamaan tai muokkaamaan tapahtumaa, hae ensin get_calendar_events:lla oikean kalenterin id ja event_id, ja käytä niitä sitten poistossa/muokkauksessa.
-- Jos create_calendar_event palauttaa status="duplicate", älä yritä lisätä uudelleen samoin parametrein. Kerro käyttäjälle löytyneestä päällekkäisestä tapahtumasta ja kysy haluaako hän silti lisätä uuden — vasta vahvistuksen jälkeen kutsu uudelleen parametrilla allow_duplicate=true.
-
-KOKO PÄIVÄN TAPAHTUMAT:
-- Kun käyttäjä mainitsee koko päivän tapahtuman (lomat, syntymäpäivät, useamman päivän matkat, varaukset), aseta all_day=true.
-- Anna start ja end päivämääräinä ("YYYY-MM-DD"), ei kellonajan kanssa.
-- end on EKSKLUSIIVINEN: tapahtumalle joka kestää 15.–25.7. käytä start="2026-07-15", end="2026-07-26". Yhden päivän tapahtumalle 15.7. käytä start="2026-07-15", end="2026-07-16".
-
-HAKU:
-- Kun käyttäjä kysyy menneitä tapahtumia ("milloin oli…", "viime kuussa", "viime viikolla"), aseta from-parametri menneisyyteen. Esim. "viime kuukauden tapahtumat" → from=kuukausi sitten, to=nyt.
-- Kun käyttäjä etsii tapahtumaa nimeltä tai aiheelta ("milloin oli Mikon tapaaminen", "Pariisin matka"), käytä query-parametria. Aseta from riittävän pitkälle menneisyyteen (esim. vuosi taaksepäin) jos epäselvä milloin tapahtuma on ollut.
-
-KUVAN KÄSITTELY:
-- Jos viestissä on kuva ja siinä näkyy mitä tahansa tapahtumia, menoja, työvuoroja, aikatauluja, lippuja tai kutsuja, tunnista ne kaikki.
-- Jos käyttäjä on kertonut viestissään mihin kalenteriin tapahtumat lisätään, lisää ne suoraan create_calendar_event-työkalulla.
-- Jos kohdekalenteri ei ole selvä, listaa ensin tunnistetut tapahtumat lyhyesti ja kysy käyttäjältä mihin kalenteriin lisätään. Älä lisää mitään ennen vastausta.
-
-KOHTELIAISUUS:
-- Jos käyttäjä kiittää ilman pyyntöä, vastaa "Ole hyvä!" ja kysy voitko auttaa muissa asioissa. Listaa lyhyesti mitä voit tehdä:
-  • Lisätä tapahtumia kalenteriin
-  • Hakea tulevia tapahtumia
-  • Muokata tai poistaa tapahtumia
-  • Lukea kuvasta tapahtumia, menoja tai aikatauluja`;
-}
-
-function buildEventTime(
-  value: string,
-  allDay: boolean
-): calendar_v3.Schema$EventDateTime {
-  return allDay
-    ? { date: value.slice(0, 10) }
-    : { dateTime: value, timeZone: "Europe/Helsinki" };
-}
-
-function toISOTimestamp(s: string): string {
-  return new Date(s.includes("T") ? s : `${s}T00:00:00Z`).toISOString();
-}
-
-async function executeTool(
-  block: { id: string; name: string; input: unknown },
-  calendar: calendar_v3.Calendar
-): Promise<string> {
-  try {
-    if (block.name === "create_calendar_event") {
-      const input = block.input as {
-        title: string;
-        start: string;
-        end: string;
-        description?: string;
-        calendar_id?: string;
-        all_day?: boolean;
-        allow_duplicate?: boolean;
-      };
-      const calId = input.calendar_id || "primary";
-      const allDay = input.all_day ?? false;
-
-      if (!input.allow_duplicate) {
-        const normalize = (s: string) => s.toLowerCase().trim().replace(/\s+/g, " ");
-        const newTitle = normalize(input.title);
-
-        const existing = await calendar.events.list({
-          calendarId: calId,
-          timeMin: toISOTimestamp(input.start),
-          timeMax: toISOTimestamp(input.end),
-          singleEvents: true,
-        });
-
-        const duplicate = existing.data.items?.find(
-          (e) => e.summary && normalize(e.summary) === newTitle
-        );
-
-        if (duplicate) {
-          return JSON.stringify({
-            status: "duplicate",
-            message:
-              "Samanniminen ja päällekkäinen tapahtuma löytyi. Kerro käyttäjälle ja kysy halutaanko silti lisätä — jos kyllä, kutsu uudelleen parametrilla allow_duplicate=true.",
-            existing: {
-              id: duplicate.id,
-              title: duplicate.summary,
-              start: duplicate.start?.dateTime || duplicate.start?.date,
-              end: duplicate.end?.dateTime || duplicate.end?.date,
-              description: duplicate.description,
-            },
-          });
-        }
-      }
-
-      const created = await calendar.events.insert({
-        calendarId: calId,
-        requestBody: {
-          summary: input.title,
-          description: input.description,
-          start: buildEventTime(input.start, allDay),
-          end: buildEventTime(input.end, allDay),
-        },
-      });
-
-      return JSON.stringify({
-        status: "created",
-        id: created.data.id,
-        title: input.title,
-        start: input.start,
-        end: input.end,
-        all_day: allDay,
-        calendar_id: calId,
-      });
-    }
-
-    if (block.name === "get_calendar_events") {
-      const input = block.input as {
-        from?: string;
-        to?: string;
-        query?: string;
-        calendar_ids?: string[];
-      };
-
-      const timeMin = input.from ? toISOTimestamp(input.from) : new Date().toISOString();
-      const timeMax = input.to
-        ? toISOTimestamp(input.to)
-        : new Date(new Date(timeMin).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
-
-      const ids = input.calendar_ids?.length ? input.calendar_ids : ["primary"];
-      const all: object[] = [];
-
-      const lists = await Promise.all(
-        ids.map((id) =>
-          calendar.events
-            .list({
-              calendarId: id,
-              timeMin,
-              timeMax,
-              q: input.query,
-              singleEvents: true,
-              orderBy: "startTime",
-            })
-            .then((res) => ({ id, items: res.data.items ?? [] }))
-            .catch(() => ({ id, items: [] as calendar_v3.Schema$Event[] }))
-        )
-      );
-
-      for (const { id, items } of lists) {
-        for (const e of items) {
-          all.push({
-            id: e.id,
-            title: e.summary,
-            start: e.start?.dateTime || e.start?.date,
-            end: e.end?.dateTime || e.end?.date,
-            all_day: !!e.start?.date && !e.start?.dateTime,
-            location: e.location,
-            description: e.description,
-            calendar_id: id,
-          });
-        }
-      }
-
-      return JSON.stringify(all);
-    }
-
-    if (block.name === "delete_calendar_event") {
-      const input = block.input as { event_id: string; calendar_id?: string };
-      const calId = input.calendar_id || "primary";
-      await calendar.events.delete({ calendarId: calId, eventId: input.event_id });
-      return JSON.stringify({ status: "deleted", event_id: input.event_id });
-    }
-
-    if (block.name === "update_calendar_event") {
-      const input = block.input as {
-        event_id: string;
-        calendar_id?: string;
-        title?: string;
-        start?: string;
-        end?: string;
-        description?: string;
-        all_day?: boolean;
-      };
-      const calId = input.calendar_id || "primary";
-      const allDay = input.all_day ?? false;
-      const patch: Record<string, unknown> = {};
-      if (input.title) patch.summary = input.title;
-      if (input.description !== undefined) patch.description = input.description;
-      if (input.start) patch.start = buildEventTime(input.start, allDay);
-      if (input.end) patch.end = buildEventTime(input.end, allDay);
-      await calendar.events.patch({ calendarId: calId, eventId: input.event_id, requestBody: patch });
-      return JSON.stringify({ status: "updated", event_id: input.event_id });
-    }
-
-    return JSON.stringify({ status: "error", message: `Tuntematon työkalu: ${block.name}` });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Tuntematon virhe";
-    return JSON.stringify({ status: "error", message });
-  }
-}
 
 const encoder = new TextEncoder();
 
@@ -380,11 +40,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ reply: "Kirjaudu ensin Google-tilille.", relogin: true });
   }
 
-  const auth = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    `${request.nextUrl.origin}/api/auth/callback`
-  );
+  const auth = createOAuthClient(request.nextUrl.origin);
   auth.setCredentials(parsedTokens);
   let refreshedTokens: string | null = null;
 
@@ -407,8 +63,8 @@ export async function POST(request: NextRequest) {
   if (calendarsCookie) {
     try {
       calendars = JSON.parse(calendarsCookie);
-    } catch {
-      // ignore — fall back to primary-only behavior
+    } catch (err) {
+      console.error("Failed to parse bantu_calendars cookie", err);
     }
   }
 
@@ -418,11 +74,7 @@ export async function POST(request: NextRequest) {
     "X-Accel-Buffering": "no",
   });
   if (refreshedTokens) {
-    const prod = process.env.NODE_ENV === "production";
-    streamHeaders.append(
-      "Set-Cookie",
-      `google_tokens=${encodeURIComponent(refreshedTokens)}; HttpOnly; Max-Age=${60 * 60 * 24 * 7}; Path=/; SameSite=Lax${prod ? "; Secure" : ""}`
-    );
+    streamHeaders.append("Set-Cookie", googleTokensSetCookieHeader(refreshedTokens));
   }
 
   const systemPrompt = buildSystemPrompt(calendars);
@@ -449,7 +101,7 @@ export async function POST(request: NextRequest) {
         };
       }
       return { role: m.role as "user" | "assistant", content: m.content };
-    }
+    },
   );
 
   async function* generate(): AsyncGenerator<Uint8Array> {
@@ -482,21 +134,16 @@ export async function POST(request: NextRequest) {
         const response = await stream.finalMessage();
         conversation.push({ role: "assistant", content: response.content });
 
-        const toolResultBlocks: Array<{
-          type: "tool_result";
-          tool_use_id: string;
-          content: string;
-        }> = [];
-
-        for (const block of response.content) {
-          if (block.type !== "tool_use") continue;
-          const result = await executeTool(block, calendar);
-          toolResultBlocks.push({
-            type: "tool_result",
+        const toolUseBlocks = response.content.filter(
+          (b): b is Extract<typeof b, { type: "tool_use" }> => b.type === "tool_use",
+        );
+        const toolResultBlocks = await Promise.all(
+          toolUseBlocks.map(async (block) => ({
+            type: "tool_result" as const,
             tool_use_id: block.id,
-            content: result,
-          });
-        }
+            content: await executeTool(block, calendar),
+          })),
+        );
 
         if (toolResultBlocks.length === 0) break;
         conversation.push({ role: "user", content: toolResultBlocks });
