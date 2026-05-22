@@ -3,21 +3,25 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 
-function BantuAvatar({ className = "" }: { className?: string }) {
+function BantuAvatar({ size = 28 }: { size?: number }) {
   return (
-    <div className={`rounded-xl bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-700 flex items-center justify-center flex-none ${className}`}>
-      <svg viewBox="0 0 34 34" fill="none" className="w-[58%] h-[58%]">
-        <rect x="3" y="7" width="22" height="20" rx="3" stroke="white" strokeWidth="1.6" fill="none" strokeOpacity="0.9"/>
-        <rect x="3" y="7" width="22" height="7" rx="3" fill="white" fillOpacity="0.15"/>
-        <line x1="3" y1="14" x2="25" y2="14" stroke="white" strokeWidth="1.4" strokeOpacity="0.5"/>
-        <line x1="9" y1="5" x2="9" y2="9" stroke="white" strokeWidth="1.8" strokeLinecap="round"/>
-        <line x1="19" y1="5" x2="19" y2="9" stroke="white" strokeWidth="1.8" strokeLinecap="round"/>
-        <circle cx="9" cy="19" r="1.3" fill="white" fillOpacity="0.7"/>
-        <circle cx="14" cy="19" r="1.3" fill="white" fillOpacity="0.7"/>
-        <circle cx="19" cy="19" r="1.3" fill="white" fillOpacity="0.7"/>
-        <circle cx="9" cy="24" r="1.3" fill="white" fillOpacity="0.7"/>
-        <circle cx="14" cy="24" r="1.3" fill="white" fillOpacity="0.7"/>
-        <path d="M28 4 L29.1 7.9 L33 9 L29.1 10.1 L28 14 L26.9 10.1 L23 9 L26.9 7.9 Z" fill="white" opacity="0.95"/>
+    <div
+      className="app-icon flex items-center justify-center flex-none"
+      style={{ width: size, height: size }}
+      aria-hidden
+    >
+      <svg viewBox="0 0 34 34" fill="none" style={{ width: size * 0.58, height: size * 0.58 }}>
+        <rect x="3" y="7" width="22" height="20" rx="3.2" stroke="white" strokeWidth="1.6" fill="none" strokeOpacity="0.95" />
+        <rect x="3" y="7" width="22" height="7" rx="3.2" fill="white" fillOpacity="0.18" />
+        <line x1="3" y1="14" x2="25" y2="14" stroke="white" strokeWidth="1.3" strokeOpacity="0.55" />
+        <line x1="9" y1="5" x2="9" y2="9" stroke="white" strokeWidth="1.9" strokeLinecap="round" />
+        <line x1="19" y1="5" x2="19" y2="9" stroke="white" strokeWidth="1.9" strokeLinecap="round" />
+        <circle cx="9" cy="19" r="1.35" fill="white" fillOpacity="0.85" />
+        <circle cx="14" cy="19" r="1.35" fill="white" fillOpacity="0.85" />
+        <circle cx="19" cy="19" r="1.35" fill="white" fillOpacity="0.85" />
+        <circle cx="9" cy="24" r="1.35" fill="white" fillOpacity="0.85" />
+        <circle cx="14" cy="24" r="1.35" fill="white" fillOpacity="0.85" />
+        <path d="M28 4 L29.1 7.9 L33 9 L29.1 10.1 L28 14 L26.9 10.1 L23 9 L26.9 7.9 Z" fill="white" opacity="0.98" />
       </svg>
     </div>
   );
@@ -30,12 +34,19 @@ type Message = {
 };
 
 type PendingImage = {
-  data: string;      // base64 ilman data URL -etuliitettä
+  data: string;
   mediaType: string;
-  url: string;       // data URL esikatselua varten
+  url: string;
 };
 
 const STORAGE_KEY = "chat_history";
+
+const SUGGESTIONS = [
+  "Lisää tapaaminen Annan kanssa torstaina klo 14",
+  "Mitä minulla on huomenna?",
+  "Siirrä lounas perjantaille",
+  "Etsi vapaa aika ensi viikolla",
+];
 
 export default function Dashboard() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -43,14 +54,13 @@ export default function Dashboard() {
   useEffect(() => {
     try {
       const saved = sessionStorage.getItem(STORAGE_KEY);
-      // sessionStorage ei ole saatavilla SSR-passissa, joten alustus
-      // joudutaan tekemään effectissä ennen ensimmäistä renderiä.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       if (saved) setMessages(JSON.parse(saved));
     } catch {
       // sessionStorage ei käytettävissä
     }
   }, []);
+
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [pendingImage, setPendingImage] = useState<PendingImage | null>(null);
@@ -74,7 +84,6 @@ export default function Dashboard() {
         charIntervalRef.current = null;
         return;
       }
-      // Adaptive speed: drain faster when falling behind
       const q = pendingCharsRef.current.length;
       const count = q > 100 ? 4 : q > 40 ? 2 : 1;
       const chars = pendingCharsRef.current.slice(0, count);
@@ -93,7 +102,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     try {
-      // Ei tallenneta base64-kuvia sessionStorageen
       const toSave = messages.map((m) => ({ role: m.role, content: m.content }));
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
     } catch {
@@ -122,8 +130,8 @@ export default function Dashboard() {
     e.target.value = "";
   }
 
-  async function sendMessage() {
-    const text = input.trim();
+  async function sendMessage(textOverride?: string) {
+    const text = (textOverride ?? input).trim();
     if ((!text && !pendingImage) || loading) return;
 
     const userMessage: Message = {
@@ -138,7 +146,6 @@ export default function Dashboard() {
     setPendingImage(null);
     setLoading(true);
 
-    // Reset typewriter state from any previous message
     if (charIntervalRef.current) {
       clearInterval(charIntervalRef.current);
       charIntervalRef.current = null;
@@ -161,7 +168,6 @@ export default function Dashboard() {
         }),
       });
 
-      // Auth errors come back as plain JSON
       if (res.headers.get("content-type")?.includes("application/json")) {
         const data = await res.json();
         setMessages([...updatedMessages, { role: "assistant", content: data.reply }]);
@@ -170,7 +176,6 @@ export default function Dashboard() {
         return;
       }
 
-      // NDJSON stream
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -231,170 +236,218 @@ export default function Dashboard() {
     e.target.style.height = Math.min(e.target.scrollHeight, 160) + "px";
   }
 
+  const canSend = !loading && (!!input.trim() || !!pendingImage);
+
   return (
-    <div className="flex h-dvh bg-[#05050a] text-white font-[450] justify-center items-center sm:p-5">
-      <div className="relative flex flex-col w-full max-w-[800px] h-full bg-[#0e0e16] sm:border sm:border-white/10 sm:rounded-2xl overflow-hidden">
+    <main className="relative h-dvh w-full overflow-hidden">
+      <div className="aurora" />
+      <div className="aurora-warm" />
 
-        {/* Header */}
-        <header className="flex-none px-6 py-4 border-b border-white/10 flex items-center gap-3">
-          <span className="absolute top-2 left-2 text-[10px] font-semibold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-md px-1.5 py-0.5 tracking-wide">DEV</span>
-          <BantuAvatar className="w-8 h-8" />
-          <div className="flex-1">
-            <h1 className="text-[15px] font-semibold leading-none">Bantu</h1>
-            <p className="text-[11px] text-gray-400 mt-0.5">{loading ? "kirjoittaa…" : "valmis"}</p>
-          </div>
-          <a
-            href="/api/auth/logout"
-            className="text-[12px] text-gray-500 hover:text-gray-300 transition-colors px-2 py-1 rounded-lg hover:bg-white/5"
-          >
-            Kirjaudu ulos
-          </a>
-        </header>
+      <div className="relative z-10 h-full w-full flex justify-center sm:p-5">
+        <div className="relative flex flex-col w-full max-w-[820px] h-full sm:rounded-[28px] overflow-hidden glass-strong">
 
-        {/* Message list */}
-        <div className="flex-1 overflow-y-auto px-4 py-6 space-y-3 sm:px-5 sm:py-8">
-          {messages.length === 0 && (
-            <div className="flex flex-col items-center gap-2 mt-24 text-center">
-              <div className="w-12 h-12 rounded-2xl bg-blue-600/20 flex items-center justify-center text-xl mb-2">
-                📅
-              </div>
-              <p className="text-gray-300 font-medium">Mitä haluaisit tehdä?</p>
-              <p className="text-gray-500 text-sm">
-                Voit lisätä, hakea tai poistaa tapahtumia — tai lähetä kuva missä näkyy menoja tai aikatauluja.
-              </p>
-            </div>
-          )}
-
-          {messages.map((msg, i) => (
-            <div
-              key={i}
-              className={`flex items-end gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-            >
-              {msg.role === "assistant" && (
-                <BantuAvatar className="w-7 h-7 mb-0.5" />
-              )}
-
-              <div className={`max-w-[85%] sm:max-w-[72%] text-[14px] leading-relaxed ${
-                msg.role === "user"
-                  ? "bg-blue-600 text-white rounded-[20px] rounded-br-[4px] shadow-md overflow-hidden"
-                  : "bg-[#181826] text-gray-100 px-4 py-3 rounded-[20px] rounded-bl-[4px] border border-white/8 shadow-md prose prose-invert prose-sm max-w-none"
-              }`}>
-                {msg.imageUrl && (
-                  // next/image ei toimi base64 data-URL:eille — käytetään natiivia img-tagia.
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={msg.imageUrl}
-                    alt="Lähetetty kuva"
-                    className="w-full max-w-[260px] rounded-[16px] rounded-br-[4px] block"
-                  />
-                )}
-                {msg.content && (
-                  <div className={msg.imageUrl ? "px-4 py-2" : "px-4 py-2.5"}>
-                    {msg.role === "assistant"
-                      ? <ReactMarkdown>{msg.content}</ReactMarkdown>
-                      : msg.content}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-
-          {loading && (
-            <div className="flex items-end gap-2 justify-start">
-              <BantuAvatar className="w-7 h-7 mb-0.5" />
-              <div className="bg-[#181826] border border-white/8 rounded-[20px] rounded-bl-[4px] px-4 py-3.5 shadow-md">
-                <span className="flex gap-[5px] items-center">
-                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:0ms]" />
-                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:160ms]" />
-                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:320ms]" />
+          {/* Header — floating glass bar */}
+          <header className="flex-none flex items-center gap-3 px-5 py-3.5 border-b border-[color:var(--color-hairline-soft)]">
+            <BantuAvatar size={32} />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h1 className="text-[15px] font-semibold tracking-tight leading-none">Bantu</h1>
+                <span className="text-[10px] font-semibold tracking-wider uppercase px-1.5 py-[2px] rounded-md bg-[color:var(--color-ink)]/[0.06] text-[color:var(--color-ink-soft)]">
+                  Dev
                 </span>
               </div>
+              <div className="mt-1 flex items-center gap-1.5">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    loading ? "bg-[color:var(--color-accent)]" : "bg-emerald-500"
+                  }`}
+                />
+                <p className="text-[11.5px] text-[color:var(--color-ink-soft)] leading-none">
+                  {loading ? "ajattelee…" : "valmis"}
+                </p>
+              </div>
             </div>
-          )}
+            <a
+              href="/api/auth/logout"
+              className="text-[12.5px] text-[color:var(--color-ink-soft)] hover:text-[color:var(--color-ink)] transition-colors px-3 py-1.5 rounded-full hover:bg-black/[0.04]"
+            >
+              Kirjaudu ulos
+            </a>
+          </header>
 
-          <div ref={bottomRef} />
-        </div>
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
+            {messages.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center px-2">
+                <div
+                  className="reveal mb-6"
+                  style={{ animationDelay: "60ms" }}
+                >
+                  <BantuAvatar size={64} />
+                </div>
+                <h2
+                  className="reveal text-[28px] sm:text-[32px] font-semibold tracking-display leading-tight"
+                  style={{ animationDelay: "180ms" }}
+                >
+                  Hei. Mitä järjestellään?
+                </h2>
+                <p
+                  className="reveal mt-2 max-w-[360px] text-[14.5px] text-[color:var(--color-ink-soft)] leading-relaxed"
+                  style={{ animationDelay: "280ms" }}
+                >
+                  Lisää, hae tai siirrä tapahtumia luonnollisella kielellä — tai lähetä kuva aikataulusta.
+                </p>
+                <div
+                  className="reveal mt-8 flex flex-col gap-2 w-full max-w-[420px]"
+                  style={{ animationDelay: "400ms" }}
+                >
+                  {SUGGESTIONS.map((s, i) => (
+                    <button
+                      key={s}
+                      onClick={() => sendMessage(s)}
+                      className="lift glass rounded-2xl px-4 py-3 text-left text-[14px] text-[color:var(--color-ink)] hover:bg-white/90"
+                      style={{ animationDelay: `${480 + i * 70}ms` }}
+                    >
+                      <span className="text-[color:var(--color-accent)] mr-2">›</span>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {messages.map((msg, i) => (
+                  <div
+                    key={i}
+                    className={`flex items-end gap-2 ${
+                      msg.role === "user" ? "justify-end" : "justify-start"
+                    } bubble-in`}
+                  >
+                    {msg.role === "assistant" && <BantuAvatar size={26} />}
 
-        {/* Input bar */}
-        <div
-          className="flex-none border-t border-white/10 px-3 pt-4 sm:px-5 sm:pt-4"
-          style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
-        >
+                    <div
+                      className={`max-w-[85%] sm:max-w-[70%] text-[14.5px] leading-relaxed ${
+                        msg.role === "user"
+                          ? "bubble-out rounded-[22px] rounded-br-[6px] overflow-hidden"
+                          : "glass rounded-[22px] rounded-bl-[6px] overflow-hidden text-[color:var(--color-ink)] prose-bantu"
+                      }`}
+                    >
+                      {msg.imageUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={msg.imageUrl}
+                          alt="Lähetetty kuva"
+                          className="w-full max-w-[280px] block"
+                        />
+                      )}
+                      {msg.content && (
+                        <div className={msg.imageUrl ? "px-4 py-2.5" : "px-4 py-2.5"}>
+                          {msg.role === "assistant"
+                            ? <ReactMarkdown>{msg.content}</ReactMarkdown>
+                            : msg.content}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
 
-          {/* Kuvan esikatselu */}
-          {pendingImage && (
-            <div className="relative inline-block mb-2 ml-1">
-              {/* next/image ei toimi base64 data-URL:eille — käytetään natiivia img-tagia. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={pendingImage.url}
-                alt="Esikatselu"
-                className="h-16 w-16 object-cover rounded-xl border border-white/10"
-              />
+                {loading && (
+                  <div className="flex items-end gap-2 justify-start bubble-in">
+                    <BantuAvatar size={26} />
+                    <div className="glass rounded-[22px] rounded-bl-[6px] px-4 py-3.5">
+                      <span className="flex gap-[5px] items-center">
+                        <span className="dot" />
+                        <span className="dot" style={{ animationDelay: "150ms" }} />
+                        <span className="dot" style={{ animationDelay: "300ms" }} />
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div ref={bottomRef} />
+              </div>
+            )}
+          </div>
+
+          {/* Input bar */}
+          <div
+            className="flex-none px-3 sm:px-5 pt-3 border-t border-[color:var(--color-hairline-soft)]"
+            style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+          >
+            {pendingImage && (
+              <div className="relative inline-block mb-2 ml-1">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={pendingImage.url}
+                  alt="Esikatselu"
+                  className="h-16 w-16 object-cover rounded-2xl border border-[color:var(--color-hairline)]"
+                />
+                <button
+                  onClick={() => setPendingImage(null)}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[color:var(--color-ink)] text-white flex items-center justify-center shadow"
+                  aria-label="Poista kuva"
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            )}
+
+            <div className="flex items-end gap-2">
               <button
-                onClick={() => setPendingImage(null)}
-                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition-colors"
-                aria-label="Poista kuva"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={loading}
+                className="lift flex-none w-11 h-11 rounded-full flex items-center justify-center text-[color:var(--color-ink-soft)] hover:text-[color:var(--color-ink)] hover:bg-black/[0.04] transition disabled:opacity-40"
+                aria-label="Lisää kuva"
               >
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M18 6L6 18M6 6l12 12" />
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 8v8M8 12h8" />
+                </svg>
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileSelect}
+              />
+
+              <div className="flex-1 flex items-end glass rounded-3xl px-4 py-2.5 focus-within:ring-2 focus-within:ring-[color:var(--color-accent)]/40 transition">
+                <textarea
+                  ref={textareaRef}
+                  className="flex-1 bg-transparent resize-none outline-none text-[16px] leading-relaxed overflow-hidden placeholder:text-[color:var(--color-ink-faint)] text-[color:var(--color-ink)] py-1.5"
+                  rows={1}
+                  placeholder={pendingImage ? "Lisää viesti kuvaan…" : "Kysy Bantulta"}
+                  value={input}
+                  onChange={handleInput}
+                  onKeyDown={handleKeyDown}
+                />
+              </div>
+
+              <button
+                onClick={() => sendMessage()}
+                disabled={!canSend}
+                className={`flex-none w-11 h-11 rounded-full flex items-center justify-center transition
+                  ${canSend
+                    ? "bg-[color:var(--color-accent)] hover:bg-[color:var(--color-accent-deep)] text-white shadow-[0_1px_2px_rgba(0,80,200,0.18),0_8px_22px_-6px_rgba(0,80,200,0.45)] active:translate-y-[0.5px]"
+                    : "bg-black/[0.06] text-[color:var(--color-ink-faint)]"
+                  }`}
+                aria-label="Lähetä"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 19V5" />
+                  <path d="M5 12l7-7 7 7" />
                 </svg>
               </button>
             </div>
-          )}
-
-          <div className="flex items-end gap-2.5">
-            {/* Kuvan lähetyspainike */}
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={loading}
-              className="flex-none w-12 h-12 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center transition-all text-gray-400 hover:text-gray-200 hover:bg-white/5 disabled:opacity-40"
-              aria-label="Lisää kuva"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="3" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <path d="M21 15l-5-5L5 21" />
-              </svg>
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleFileSelect}
-            />
-
-            <div className="flex-1 flex items-end bg-[#181826] border border-white/10 rounded-2xl px-4 py-3 focus-within:border-blue-500/50 transition-colors">
-              <textarea
-                ref={textareaRef}
-                className="flex-1 bg-transparent text-white resize-none outline-none text-[16px] leading-relaxed overflow-hidden placeholder:text-gray-500 font-[450]"
-                rows={1}
-                placeholder={pendingImage ? "Lisää viesti kuvaan (valinnainen)…" : "Kirjoita Bantulle…"}
-                value={input}
-                onChange={handleInput}
-                onKeyDown={handleKeyDown}
-              />
-            </div>
-
-            <button
-              onClick={sendMessage}
-              disabled={loading || (!input.trim() && !pendingImage)}
-              className="flex-none w-12 h-12 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center transition-all bg-blue-600 hover:bg-blue-500 disabled:bg-[#1e1e2e] disabled:text-gray-600 text-white shadow-sm"
-              aria-label="Lähetä"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M22 2L11 13" />
-                <path d="M22 2L15 22L11 13L2 9L22 2Z" />
-              </svg>
-            </button>
+            <p className="hidden sm:block text-center text-[11px] text-[color:var(--color-ink-faint)] mt-2.5">
+              Enter lähettää · Shift+Enter uusi rivi
+            </p>
           </div>
-          <p className="hidden sm:block text-center text-[11px] text-gray-600 mt-2">
-            Enter lähettää · Shift+Enter uusi rivi · Kuvakkeella voit lähettää kuvan tapahtumista
-          </p>
         </div>
-
       </div>
-    </div>
+    </main>
   );
 }

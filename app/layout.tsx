@@ -16,6 +16,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  themeColor: "#fbfbfd",
 };
 
 export const metadata: Metadata = {
@@ -24,7 +25,7 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
+    statusBarStyle: "default",
     title: "Bantu",
   },
 };
@@ -39,7 +40,9 @@ export default function RootLayout({
       lang="fi"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="h-full overflow-hidden">{children}</body>
+      <body className="h-full overflow-hidden bg-[color:var(--color-canvas)] text-[color:var(--color-ink)]">
+        {children}
+      </body>
     </html>
   );
 }
