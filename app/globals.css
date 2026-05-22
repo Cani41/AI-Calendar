@@ -1,10 +1,12 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
-  /* Apple-leaning palette */
+  /* Apple-leaning palette (light defaults) */
   --color-canvas: #fbfbfd;
   --color-ink: #1d1d1f;
   --color-ink-soft: #6e6e73;
@@ -12,8 +14,54 @@
   --color-hairline: rgba(0, 0, 0, 0.08);
   --color-hairline-soft: rgba(0, 0, 0, 0.04);
   --color-glass: rgba(255, 255, 255, 0.72);
+  --color-glass-strong: rgba(255, 255, 255, 0.88);
   --color-accent: #0071e3;
   --color-accent-deep: #0058b8;
+
+  --glass-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.35),
+    0 1px 2px rgba(20, 20, 30, 0.04),
+    0 12px 40px -12px rgba(20, 30, 60, 0.12);
+
+  --glass-strong-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.4),
+    0 1px 2px rgba(20, 20, 30, 0.04),
+    0 18px 48px -16px rgba(20, 30, 60, 0.18);
+
+  --aurora-a: rgba(120, 180, 255, 0.55);
+  --aurora-b: rgba(190, 160, 255, 0.45);
+  --aurora-c: rgba(255, 200, 170, 0.32);
+}
+
+:root.dark {
+  --color-canvas: #0a0a0c;
+  --color-ink: #f5f5f7;
+  --color-ink-soft: #a1a1a6;
+  --color-ink-faint: #6e6e73;
+  --color-hairline: rgba(255, 255, 255, 0.1);
+  --color-hairline-soft: rgba(255, 255, 255, 0.06);
+  --color-glass: rgba(28, 28, 32, 0.55);
+  --color-glass-strong: rgba(22, 22, 26, 0.72);
+  --color-accent: #0a84ff;
+  --color-accent-deep: #0066cc;
+
+  --glass-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 16px 48px -14px rgba(0, 0, 0, 0.6);
+
+  --glass-strong-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.5),
+    0 22px 60px -18px rgba(0, 0, 0, 0.7);
+
+  --aurora-a: rgba(60, 120, 220, 0.28);
+  --aurora-b: rgba(140, 90, 230, 0.22);
+  --aurora-c: rgba(255, 130, 100, 0.12);
 }
 
 html,
@@ -55,11 +103,7 @@ body {
   height: 60vmax;
   left: -15vmax;
   top: -20vmax;
-  background: radial-gradient(
-    circle,
-    rgba(120, 180, 255, 0.55),
-    rgba(120, 180, 255, 0) 60%
-  );
+  background: radial-gradient(circle, var(--aurora-a), transparent 60%);
   animation: drift-a 24s ease-in-out infinite alternate;
 }
 
@@ -68,11 +112,7 @@ body {
   height: 55vmax;
   right: -18vmax;
   bottom: -22vmax;
-  background: radial-gradient(
-    circle,
-    rgba(190, 160, 255, 0.45),
-    rgba(190, 160, 255, 0) 60%
-  );
+  background: radial-gradient(circle, var(--aurora-b), transparent 60%);
   animation: drift-b 28s ease-in-out infinite alternate;
 }
 
@@ -83,11 +123,7 @@ body {
   left: 30vw;
   top: 35vh;
   border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    rgba(255, 200, 170, 0.32),
-    rgba(255, 200, 170, 0) 60%
-  );
+  background: radial-gradient(circle, var(--aurora-c), transparent 60%);
   filter: blur(90px);
   opacity: 0.6;
   pointer-events: none;
@@ -100,26 +136,23 @@ body {
     transform: translate(8vmax, 6vmax) scale(1.08);
   }
 }
-
 @keyframes drift-b {
   to {
     transform: translate(-6vmax, -4vmax) scale(1.05);
   }
 }
-
 @keyframes drift-c {
   to {
     transform: translate(-10vmax, 8vmax) scale(0.92);
   }
 }
 
-/* Reveal — page entry animation, staggered via animation-delay */
+/* Reveal — page entry */
 .reveal {
   opacity: 0;
   transform: translateY(8px);
   animation: reveal 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
-
 @keyframes reveal {
   to {
     opacity: 1;
@@ -127,13 +160,12 @@ body {
   }
 }
 
-/* Bubble — chat message entry */
+/* Bubble entry */
 .bubble-in {
   opacity: 0;
   transform: translateY(6px) scale(0.98);
   animation: bubble 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
-
 @keyframes bubble {
   to {
     opacity: 1;
@@ -141,30 +173,22 @@ body {
   }
 }
 
-/* Glass — frosted surface with subtle inner highlight */
+/* Glass — frosted surface */
 .glass {
   background: var(--color-glass);
   backdrop-filter: saturate(180%) blur(28px);
   -webkit-backdrop-filter: saturate(180%) blur(28px);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.35),
-    0 1px 2px rgba(20, 20, 30, 0.04),
-    0 12px 40px -12px rgba(20, 30, 60, 0.12);
+  box-shadow: var(--glass-shadow);
 }
 
 .glass-strong {
-  background: rgba(255, 255, 255, 0.88);
+  background: var(--color-glass-strong);
   backdrop-filter: saturate(180%) blur(32px);
   -webkit-backdrop-filter: saturate(180%) blur(32px);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 1),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.4),
-    0 1px 2px rgba(20, 20, 30, 0.04),
-    0 18px 48px -16px rgba(20, 30, 60, 0.18);
+  box-shadow: var(--glass-strong-shadow);
 }
 
-/* iMessage-style outgoing bubble — deep glossy blue */
+/* iMessage-style outgoing bubble — same in both themes */
 .bubble-out {
   background: linear-gradient(180deg, #2189ff 0%, #0071e3 100%);
   color: white;
@@ -174,7 +198,7 @@ body {
     0 8px 24px -8px rgba(0, 80, 200, 0.35);
 }
 
-/* App icon — squircle with continuous corner, inner highlight, deep shadow */
+/* App icon — squircle, same in both themes */
 .app-icon {
   border-radius: 28%;
   background:
@@ -194,11 +218,11 @@ body {
 
 /* Selection */
 ::selection {
-  background: rgba(0, 113, 227, 0.18);
+  background: rgba(0, 113, 227, 0.22);
   color: var(--color-ink);
 }
 
-/* Scrollbar — Apple-thin */
+/* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -210,11 +234,17 @@ body {
   background: rgba(0, 0, 0, 0.18);
   border-radius: 999px;
 }
+:root.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+}
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.28);
 }
+:root.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
 
-/* Markdown polish inside assistant bubbles */
+/* Markdown polish */
 .prose-bantu p {
   margin: 0;
 }
@@ -242,8 +272,11 @@ body {
   border-radius: 6px;
   font-size: 0.92em;
 }
+:root.dark .prose-bantu code {
+  background: rgba(255, 255, 255, 0.08);
+}
 
-/* Typing dot — Apple-style three-dot indicator */
+/* Typing dots */
 @keyframes dot-bounce {
   0%,
   60%,
@@ -264,21 +297,40 @@ body {
   animation: dot-bounce 1.2s ease-in-out infinite;
 }
 
-/* Auto-fade for empty-state suggestions */
+/* Micro lift on hover */
 .lift {
   transition:
     transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-    background 0.25s ease;
+    background 0.25s ease,
+    opacity 0.25s ease;
 }
 .lift:hover {
   transform: translateY(-1px);
 }
 
-/* Tight tracking helpers (Apple-style display type) */
+/* Tracking helpers */
 .tracking-display {
   letter-spacing: -0.035em;
 }
 .tracking-display-tight {
   letter-spacing: -0.05em;
+}
+
+/* Theme toggle icon crossfade */
+.theme-icon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.theme-icon[data-show="false"] {
+  opacity: 0;
+  transform: scale(0.7) rotate(-30deg);
+}
+.theme-icon[data-show="true"] {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
 }

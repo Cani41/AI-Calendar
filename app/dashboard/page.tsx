@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import ThemeToggle from "../_components/ThemeToggle";
 
 function BantuAvatar({ size = 28 }: { size?: number }) {
   return (
@@ -247,7 +248,7 @@ export default function Dashboard() {
         <div className="relative flex flex-col w-full max-w-[820px] h-full sm:rounded-[28px] overflow-hidden glass-strong">
 
           {/* Header — floating glass bar */}
-          <header className="flex-none flex items-center gap-3 px-5 py-3.5 border-b border-[color:var(--color-hairline-soft)]">
+          <header className="flex-none flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-3 sm:py-3.5 border-b border-[color:var(--color-hairline-soft)]">
             <BantuAvatar size={32} />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
@@ -267,11 +268,18 @@ export default function Dashboard() {
                 </p>
               </div>
             </div>
+            <ThemeToggle />
             <a
               href="/api/auth/logout"
-              className="text-[12.5px] text-[color:var(--color-ink-soft)] hover:text-[color:var(--color-ink)] transition-colors px-3 py-1.5 rounded-full hover:bg-black/[0.04]"
+              aria-label="Kirjaudu ulos"
+              className="text-[color:var(--color-ink-soft)] hover:text-[color:var(--color-ink)] transition-colors w-11 h-11 sm:w-auto sm:h-auto sm:px-3 sm:py-2 sm:text-[12.5px] rounded-full hover:bg-black/[0.04] dark:hover:bg-white/[0.06] flex items-center justify-center"
             >
-              Kirjaudu ulos
+              <svg className="sm:hidden" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+              <span className="hidden sm:inline">Kirjaudu ulos</span>
             </a>
           </header>
 
@@ -305,7 +313,7 @@ export default function Dashboard() {
                     <button
                       key={s}
                       onClick={() => sendMessage(s)}
-                      className="lift glass rounded-2xl px-4 py-3 text-left text-[14px] text-[color:var(--color-ink)] hover:bg-white/90"
+                      className="lift glass rounded-2xl px-4 py-3 text-left text-[14px] text-[color:var(--color-ink)] hover:bg-white/90 dark:hover:bg-white/[0.08]"
                       style={{ animationDelay: `${480 + i * 70}ms` }}
                     >
                       <span className="text-[color:var(--color-accent)] mr-2">›</span>
@@ -384,7 +392,7 @@ export default function Dashboard() {
                 />
                 <button
                   onClick={() => setPendingImage(null)}
-                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[color:var(--color-ink)] text-white flex items-center justify-center shadow"
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[color:var(--color-ink)] text-[color:var(--color-canvas)] flex items-center justify-center shadow"
                   aria-label="Poista kuva"
                 >
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -398,7 +406,7 @@ export default function Dashboard() {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={loading}
-                className="lift flex-none w-11 h-11 rounded-full flex items-center justify-center text-[color:var(--color-ink-soft)] hover:text-[color:var(--color-ink)] hover:bg-black/[0.04] transition disabled:opacity-40"
+                className="lift flex-none w-11 h-11 rounded-full flex items-center justify-center text-[color:var(--color-ink-soft)] hover:text-[color:var(--color-ink)] hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition disabled:opacity-40"
                 aria-label="Lisää kuva"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -432,7 +440,7 @@ export default function Dashboard() {
                 className={`flex-none w-11 h-11 rounded-full flex items-center justify-center transition
                   ${canSend
                     ? "bg-[color:var(--color-accent)] hover:bg-[color:var(--color-accent-deep)] text-white shadow-[0_1px_2px_rgba(0,80,200,0.18),0_8px_22px_-6px_rgba(0,80,200,0.45)] active:translate-y-[0.5px]"
-                    : "bg-black/[0.06] text-[color:var(--color-ink-faint)]"
+                    : "bg-black/[0.06] dark:bg-white/[0.06] text-[color:var(--color-ink-faint)]"
                   }`}
                 aria-label="Lähetä"
               >
