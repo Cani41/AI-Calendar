@@ -244,12 +244,7 @@ export default function Dashboard() {
           <header className="flex-none flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-3 sm:py-3.5 border-b border-[color:var(--color-hairline-soft)]">
             <BantuAvatar size={32} />
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <h1 className="text-[15px] font-semibold tracking-tight leading-none">Bantu</h1>
-                <span className="text-[10px] font-semibold tracking-wider uppercase px-1.5 py-[2px] rounded-md bg-[color:var(--color-ink)]/[0.06] text-[color:var(--color-ink-soft)]">
-                  Dev
-                </span>
-              </div>
+              <h1 className="text-[15px] font-semibold tracking-tight leading-none">Bantu</h1>
               <div className="mt-1 flex items-center gap-1.5">
                 <span
                   className={`w-1.5 h-1.5 rounded-full ${
