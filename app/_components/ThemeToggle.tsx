@@ -19,6 +19,15 @@ export default function ThemeToggle({ className = "" }: { className?: string }) 
     const next = !dark;
     setDark(next);
     document.documentElement.classList.toggle("dark", next);
+    // Luodaan meta-elementti uudestaan — pelkkä setAttribute ei aina
+    // saa iOS Safarin URL-baaria päivittymään.
+    const color = next ? "#0a0a0c" : "#fbfbfd";
+    const old = document.querySelector('meta[name="theme-color"]');
+    if (old) old.parentNode?.removeChild(old);
+    const meta = document.createElement("meta");
+    meta.setAttribute("name", "theme-color");
+    meta.setAttribute("content", color);
+    document.head.appendChild(meta);
     try {
       localStorage.setItem("theme", next ? "dark" : "light");
     } catch {

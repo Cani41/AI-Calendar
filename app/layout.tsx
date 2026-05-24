@@ -16,10 +16,6 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#fbfbfd" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a0c" },
-  ],
 };
 
 export const metadata: Metadata = {
@@ -33,14 +29,23 @@ export const metadata: Metadata = {
   },
 };
 
+// Inline script runs before paint: resolves theme (localStorage > system),
+// applies .dark class, and sets the theme-color meta to match the *chosen*
+// theme (not the system preference) so the iOS/Safari URL bar matches.
 const themeInitScript = `
 (function() {
   try {
     var t = localStorage.getItem('theme');
     var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    if (t === 'dark' || (!t && prefersDark)) {
-      document.documentElement.classList.add('dark');
-    }
+    var dark = t === 'dark' || (!t && prefersDark);
+    if (dark) document.documentElement.classList.add('dark');
+    var color = dark ? '#0a0a0c' : '#fbfbfd';
+    var old = document.querySelector('meta[name="theme-color"]');
+    if (old) old.parentNode.removeChild(old);
+    var m = document.createElement('meta');
+    m.setAttribute('name', 'theme-color');
+    m.setAttribute('content', color);
+    document.head.appendChild(m);
   } catch (e) {}
 })();
 `;
@@ -57,6 +62,8 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
+        <meta name="theme-color" content="#fbfbfd" />
+        <meta name="color-scheme" content="light dark" />
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="h-full overflow-hidden bg-[color:var(--color-canvas)] text-[color:var(--color-ink)]">

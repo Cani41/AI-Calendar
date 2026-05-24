@@ -42,13 +42,6 @@ type PendingImage = {
 
 const STORAGE_KEY = "chat_history";
 
-const SUGGESTIONS = [
-  "Lisää tapaaminen Annan kanssa torstaina klo 14",
-  "Mitä minulla on huomenna?",
-  "Siirrä lounas perjantaille",
-  "Etsi vapaa aika ensi viikolla",
-];
-
 export default function Dashboard() {
   const [messages, setMessages] = useState<Message[]>([]);
 
@@ -131,8 +124,8 @@ export default function Dashboard() {
     e.target.value = "";
   }
 
-  async function sendMessage(textOverride?: string) {
-    const text = (textOverride ?? input).trim();
+  async function sendMessage() {
+    const text = input.trim();
     if ((!text && !pendingImage) || loading) return;
 
     const userMessage: Message = {
@@ -305,22 +298,6 @@ export default function Dashboard() {
                 >
                   Lisää, hae tai siirrä tapahtumia luonnollisella kielellä — tai lähetä kuva aikataulusta.
                 </p>
-                <div
-                  className="reveal mt-8 flex flex-col gap-2 w-full max-w-[420px]"
-                  style={{ animationDelay: "400ms" }}
-                >
-                  {SUGGESTIONS.map((s, i) => (
-                    <button
-                      key={s}
-                      onClick={() => sendMessage(s)}
-                      className="lift glass rounded-2xl px-4 py-3 text-left text-[14px] text-[color:var(--color-ink)] hover:bg-white/90 dark:hover:bg-white/[0.08]"
-                      style={{ animationDelay: `${480 + i * 70}ms` }}
-                    >
-                      <span className="text-[color:var(--color-accent)] mr-2">›</span>
-                      {s}
-                    </button>
-                  ))}
-                </div>
               </div>
             ) : (
               <div className="space-y-2.5">
@@ -435,7 +412,7 @@ export default function Dashboard() {
               </div>
 
               <button
-                onClick={() => sendMessage()}
+                onClick={sendMessage}
                 disabled={!canSend}
                 className={`flex-none w-11 h-11 rounded-full flex items-center justify-center transition
                   ${canSend

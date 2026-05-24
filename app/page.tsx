@@ -51,40 +51,6 @@ function BantuIcon({ size = 88 }: { size?: number }) {
   );
 }
 
-const features = [
-  {
-    title: "Luonnollinen kieli",
-    desc: "Kirjoita kuten puhuisit.",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 12a8 8 0 0 1-11.5 7.2L4 21l1.8-5.5A8 8 0 1 1 21 12Z" />
-      </svg>
-    ),
-  },
-  {
-    title: "Google Kalenteri",
-    desc: "Reaaliaikainen synkka.",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="4" width="18" height="18" rx="3" />
-        <line x1="16" y1="2" x2="16" y2="6" />
-        <line x1="8" y1="2" x2="8" y2="6" />
-        <line x1="3" y1="10" x2="21" y2="10" />
-      </svg>
-    ),
-  },
-  {
-    title: "Älykäs ajoitus",
-    desc: "Bantu löytää oikean hetken.",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="9" />
-        <path d="M12 7v5l3 2" />
-      </svg>
-    ),
-  },
-];
-
 export default function Home() {
   const [loading, setLoading] = useState(false);
   const [errorKey, setErrorKey] = useState<string | null>(null);
@@ -182,40 +148,7 @@ export default function Home() {
                 </>
               )}
             </a>
-            <p className="mt-3 text-[12px] text-[color:var(--color-ink-faint)]">
-              Ilmainen · Ei luottokorttia tarvita
-            </p>
           </div>
-
-          {/* Feature triplet */}
-          <div
-            className="reveal mt-10 sm:mt-14 w-full grid grid-cols-3 gap-2 sm:gap-3"
-            style={{ animationDelay: "520ms" }}
-          >
-            {features.map((f, i) => (
-              <div
-                key={f.title}
-                className="glass rounded-2xl px-3 py-4 flex flex-col items-center text-center gap-2"
-                style={{ animationDelay: `${560 + i * 90}ms` }}
-              >
-                <div className="text-[color:var(--color-accent)]">{f.icon}</div>
-                <div className="mt-0.5 text-[12.5px] font-semibold tracking-tight text-[color:var(--color-ink)]">
-                  {f.title}
-                </div>
-                <div className="text-[11.5px] leading-snug text-[color:var(--color-ink-soft)]">
-                  {f.desc}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Footnote */}
-          <p
-            className="reveal mt-8 sm:mt-10 text-[11px] text-[color:var(--color-ink-faint)] tracking-wide"
-            style={{ animationDelay: "780ms" }}
-          >
-            Suunniteltu suomeksi ajatellen
-          </p>
         </div>
       </div>
     </main>
