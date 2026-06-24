@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   createOAuthClient,
   googleCookieOptions,
+  publicOriginOf,
   type StoredCalendar,
 } from "@/lib/google/auth";
 
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
     return res;
   }
 
-  const oauth2Client = createOAuthClient(request.nextUrl.origin);
+  const oauth2Client = createOAuthClient(publicOriginOf(request));
 
   let tokens;
   try {
