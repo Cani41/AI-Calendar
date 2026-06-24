@@ -1,4 +1,5 @@
 import { google } from "googleapis";
+import type { NextRequest } from "next/server";
 
 export type StoredCalendar = {
   id: string;
@@ -13,6 +14,18 @@ export function createOAuthClient(origin: string) {
     process.env.GOOGLE_CLIENT_SECRET,
     `${origin}/api/auth/callback`,
   );
+}
+
+// Behind a reverse proxy `request.nextUrl.origin` reflects the upstream
+// (e.g. http://localhost:3000), not the public URL the browser saw. Trust the
+// proxy's X-Forwarded-* headers when present, falling back to the request URL
+// for direct hits (local dev without a proxy).
+export function publicOriginOf(request: NextRequest): string {
+  const host = request.headers.get("x-forwarded-host") ?? request.nextUrl.host;
+  const proto =
+    request.headers.get("x-forwarded-proto") ??
+    request.nextUrl.protocol.replace(/:$/, "");
+  return `${proto}://${host}`;
 }
 
 export const GOOGLE_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;

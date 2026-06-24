@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { createOAuthClient } from "@/lib/google/auth";
+import { createOAuthClient, publicOriginOf } from "@/lib/google/auth";
 
 export async function GET(request: NextRequest) {
-  const oauth2Client = createOAuthClient(request.nextUrl.origin);
+  const oauth2Client = createOAuthClient(publicOriginOf(request));
 
   const state = crypto.randomUUID();
 
