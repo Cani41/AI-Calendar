@@ -8,6 +8,7 @@ import { executeTool } from "@/lib/google/calendar-tools";
 import {
   createOAuthClient,
   googleTokensSetCookieHeader,
+  publicOriginOf,
   type StoredCalendar,
 } from "@/lib/google/auth";
 
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ reply: "Kirjaudu ensin Google-tilille.", relogin: true });
   }
 
-  const auth = createOAuthClient(request.nextUrl.origin);
+  const auth = createOAuthClient(publicOriginOf(request));
   auth.setCredentials(parsedTokens);
   let refreshedTokens: string | null = null;
 

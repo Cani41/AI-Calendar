@@ -23,13 +23,13 @@ export async function GET(request: NextRequest) {
     });
 
   if (!code) {
-    const res = NextResponse.redirect(new URL("/?error=missing_code", request.url));
+    const res = NextResponse.redirect(new URL("/?error=missing_code", publicOriginOf(request)));
     clearStateCookie(res);
     return res;
   }
 
   if (!returnedState || !expectedState || returnedState !== expectedState) {
-    const res = NextResponse.redirect(new URL("/?error=state_mismatch", request.url));
+    const res = NextResponse.redirect(new URL("/?error=state_mismatch", publicOriginOf(request)));
     clearStateCookie(res);
     return res;
   }
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     const result = await oauth2Client.getToken(code);
     tokens = result.tokens;
   } catch {
-    const res = NextResponse.redirect(new URL("/?error=auth_failed", request.url));
+    const res = NextResponse.redirect(new URL("/?error=auth_failed", publicOriginOf(request)));
     clearStateCookie(res);
     return res;
   }
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
     console.error("Failed to fetch calendar list", err);
   }
 
-  const response = NextResponse.redirect(new URL("/dashboard", request.url));
+  const response = NextResponse.redirect(new URL("/dashboard", publicOriginOf(request)));
   response.cookies.set("google_tokens", JSON.stringify(tokens), googleCookieOptions);
   response.cookies.set("bantu_calendars", JSON.stringify(calendars), googleCookieOptions);
   clearStateCookie(response);

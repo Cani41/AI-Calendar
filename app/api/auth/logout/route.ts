@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { googleCookieOptions } from "@/lib/google/auth";
+import { googleCookieOptions, publicOriginOf } from "@/lib/google/auth";
 
 export async function GET(request: NextRequest) {
-  const response = NextResponse.redirect(new URL("/", request.url));
+  const response = NextResponse.redirect(new URL("/", publicOriginOf(request)));
   const clearOptions = { ...googleCookieOptions, maxAge: 0 };
 
   for (const name of ["google_tokens", "bantu_calendars"]) {
